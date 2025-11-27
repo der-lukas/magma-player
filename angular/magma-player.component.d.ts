@@ -1,5 +1,5 @@
 import { OnDestroy, OnInit } from "@angular/core";
-import { MagmaPlayer } from "../MagmaPlayer.js";
+import { MagmaPlayer, MagmaPlayerError } from "../MagmaPlayer.js";
 /**
  * Angular component for MagmaPlayer integration.
  * Handles automatic lifecycle management and provides reactive signals.
@@ -18,35 +18,102 @@ import { MagmaPlayer } from "../MagmaPlayer.js";
  */
 export declare class MagmaPlayerComponent implements OnInit, OnDestroy {
     private readonly _canvasRef;
-    readonly colorVideoSrc: any;
-    readonly maskVideoSrc: any;
-    readonly fixedSize: any;
-    readonly maxSize: any;
-    readonly autoplay: any;
-    readonly useWebGL: any;
-    readonly targetFPS: any;
-    readonly autoSize: any;
-    readonly strictDuration: any;
-    readonly repeatCount: any;
-    readonly ready: any;
-    readonly error: any;
-    readonly play: any;
-    readonly pause: any;
-    readonly timeupdate: any;
-    readonly ended: any;
-    readonly seeked: any;
-    readonly warning: any;
-    readonly sizechange: any;
-    readonly isPlaying: any;
-    readonly isReady: any;
-    readonly isPaused: any;
-    readonly currentTime: any;
-    readonly duration: any;
-    readonly videoWidth: any;
-    readonly videoHeight: any;
-    readonly volume: any;
-    readonly playbackRate: any;
-    readonly loop: any;
+    readonly colorVideoSrc: () => string;
+    readonly maskVideoSrc: () => string;
+    readonly fixedSize: () => {
+        width: number;
+        height: number;
+    };
+    readonly maxSize: () => {
+        width: number;
+        height: number;
+    };
+    readonly autoplay: () => boolean;
+    readonly useWebGL: () => boolean;
+    readonly targetFPS: () => number;
+    readonly autoSize: () => boolean;
+    readonly strictDuration: () => boolean;
+    readonly repeatCount: () => number;
+    readonly ready: {
+        emit: (value: MagmaPlayer) => void;
+    };
+    readonly error: {
+        emit: (value: MagmaPlayerError) => void;
+    };
+    readonly play: {
+        emit: (value: void) => void;
+    };
+    readonly pause: {
+        emit: (value: void) => void;
+    };
+    readonly timeupdate: {
+        emit: (value: number) => void;
+    };
+    readonly ended: {
+        emit: (value: void) => void;
+    };
+    readonly seeked: {
+        emit: (value: number) => void;
+    };
+    readonly warning: {
+        emit: (value: MagmaPlayerError) => void;
+    };
+    readonly sizechange: {
+        emit: (value: {
+            width: number;
+            height: number;
+        }) => void;
+    };
+    readonly isPlaying: {
+        (): boolean;
+        set(value: boolean): void;
+        update(fn: (value: boolean) => boolean): void;
+    };
+    readonly isReady: {
+        (): boolean;
+        set(value: boolean): void;
+        update(fn: (value: boolean) => boolean): void;
+    };
+    readonly isPaused: {
+        (): boolean;
+        set(value: boolean): void;
+        update(fn: (value: boolean) => boolean): void;
+    };
+    readonly currentTime: {
+        (): number;
+        set(value: number): void;
+        update(fn: (value: number) => number): void;
+    };
+    readonly duration: {
+        (): number;
+        set(value: number): void;
+        update(fn: (value: number) => number): void;
+    };
+    readonly videoWidth: {
+        (): number;
+        set(value: number): void;
+        update(fn: (value: number) => number): void;
+    };
+    readonly videoHeight: {
+        (): number;
+        set(value: number): void;
+        update(fn: (value: number) => number): void;
+    };
+    readonly volume: {
+        (): number;
+        set(value: number): void;
+        update(fn: (value: number) => number): void;
+    };
+    readonly playbackRate: {
+        (): number;
+        set(value: number): void;
+        update(fn: (value: number) => number): void;
+    };
+    readonly loop: {
+        (): boolean;
+        set(value: boolean): void;
+        update(fn: (value: boolean) => boolean): void;
+    };
     private _player;
     private _timeUpdateThrottle;
     private _stateUpdateInterval;

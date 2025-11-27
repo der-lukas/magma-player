@@ -36,7 +36,7 @@
     "build": "npm run build:react && npm run build:angular && npm run build:cjs && npm run build:umd",
     "build:react": "npm run build:react:js && rm -f react/@react__stub.d.ts",
     "build:react:js": "esbuild react/MagmaPlayer.jsx --bundle --format=esm --outfile=react/MagmaPlayer.js --platform=browser --external:react --external:react-dom --external:../MagmaPlayer.js --jsx=automatic --packages=external",
-    "build:angular": "tsc --project tsconfig.angular.json --emitDeclarationOnly && rm -f angular/@angular__core.d.ts angular/*.js",
+    "build:angular": "node scripts/create-angular-stub.js && tsc --project tsconfig.angular.json --emitDeclarationOnly && rm -f angular/@angular__core.d.ts angular/*.js",
     "build:cjs": "esbuild MagmaPlayer.js --bundle --format=cjs --outfile=dist/magma-player.cjs.js --platform=browser",
     "build:umd": "esbuild MagmaPlayer.js --bundle --format=iife --global-name=MagmaPlayer --outfile=dist/magma-player.umd.js --platform=browser --minify",
     "prepublishOnly": "npm run build"
