@@ -3,7 +3,7 @@ example.html
 .DS_Store
 node_modules
 angular/@angular__core.d.ts
+angular/*.js
 react/@react__stub.d.ts
 react/MagmaPlayer.jsx
-angular/*.ts
 
