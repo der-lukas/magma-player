@@ -59,7 +59,8 @@ src/
     <canvas id="player-canvas"></canvas>
 
     <script type="module">
-      import { createMagmaPlayer } from "./magma/vanilla/createMagmaPlayer.js";
+      import { createMagmaPlayer } from "@der-lukas/magma-player/vanilla";
+      // Or: import { createMagmaPlayer } from "./magma/vanilla/createMagmaPlayer.js";
 
       const { player } = createMagmaPlayer({
         colorVideoSrc: "color.mp4",
@@ -104,7 +105,8 @@ Use `new MagmaPlayer()` directly when you need:
     <canvas id="player-canvas"></canvas>
 
     <script type="module">
-      import { MagmaPlayer } from "./magma/MagmaPlayer.js";
+      import { MagmaPlayer } from "@der-lukas/magma-player";
+      // Or: import { MagmaPlayer } from "./magma/MagmaPlayer.js";
 
       // MagmaPlayer supports canvas as element, selector, or function
       const player = new MagmaPlayer({
@@ -191,7 +193,8 @@ try {
 ### React (Using Component - Simplest)
 
 ```jsx
-import { MagmaPlayer } from "./magma/react/MagmaPlayer.jsx";
+import { MagmaPlayer } from "@der-lukas/magma-player/react";
+// Or: import { MagmaPlayer } from "./magma/react/MagmaPlayer.jsx";
 
 function VideoPlayer({ colorSrc, maskSrc }) {
   const playerRef = React.useRef(null);
@@ -221,7 +224,8 @@ function VideoPlayer({ colorSrc, maskSrc }) {
 ### React (Using Hook - More Control)
 
 ```jsx
-import { useMagmaPlayer } from "./magma/react/useMagmaPlayer.js";
+import { useMagmaPlayer } from "@der-lukas/magma-player/react";
+// Or: import { useMagmaPlayer } from "./magma/react/useMagmaPlayer.js";
 
 function VideoPlayer({ colorSrc, maskSrc }) {
   const { canvasRef, isReady, isPlaying, play, pause, setRepeatCount, error } =
@@ -260,7 +264,8 @@ Use `new MagmaPlayer()` directly when you need:
 
 ```jsx
 import { useRef, useEffect } from "react";
-import { MagmaPlayer } from "./magma/MagmaPlayer.js";
+import { MagmaPlayer } from "@der-lukas/magma-player";
+// Or: import { MagmaPlayer } from "./magma/MagmaPlayer.js";
 
 function VideoPlayer({ colorSrc, maskSrc }) {
   const canvasRef = useRef(null);
@@ -331,8 +336,10 @@ onUnmounted(() => {
 
 ```typescript
 import { Component } from "@angular/core";
-import { MagmaPlayerComponent } from "./magma/angular/magma-player.component";
-import type { MagmaPlayer } from "./magma/MagmaPlayer.js";
+import { MagmaPlayerComponent } from "@der-lukas/magma-player/angular";
+import type { MagmaPlayer } from "@der-lukas/magma-player";
+// Or: import { MagmaPlayerComponent } from "./magma/angular/magma-player.component";
+// Or: import type { MagmaPlayer } from "./magma/MagmaPlayer.js";
 
 @Component({
   selector: "app-video-player",
@@ -388,7 +395,8 @@ export class VideoPlayerComponent {
 
 ```typescript
 import { Component, ViewChild } from "@angular/core";
-import { MagmaPlayerComponent } from "./magma/angular/magma-player.component";
+import { MagmaPlayerComponent } from "@der-lukas/magma-player/angular";
+// Or: import { MagmaPlayerComponent } from "./magma/angular/magma-player.component";
 
 @Component({
   selector: "app-video-player",
@@ -437,7 +445,8 @@ import {
   OnInit,
   ViewChild,
 } from "@angular/core";
-import { MagmaPlayer } from "./magma/MagmaPlayer.js";
+import { MagmaPlayer } from "@der-lukas/magma-player";
+// Or: import { MagmaPlayer } from "./magma/MagmaPlayer.js";
 
 @Component({
   selector: "app-video-player",

@@ -12,6 +12,9 @@
       "import": "./MagmaPlayer.js",
       "require": "./dist/magma-player.cjs.js"
     },
+    "./react": "./react/index.js",
+    "./angular": "./angular/index.ts",
+    "./vanilla": "./vanilla/index.js",
     "./package.json": "./package.json"
   },
   "files": [
@@ -19,6 +22,9 @@
     "MagmaPlayer.d.ts",
     "index.js",
     "index.d.ts",
+    "react",
+    "angular",
+    "vanilla",
     "dist",
     "README.md",
     "LICENSE"
