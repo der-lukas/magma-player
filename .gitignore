@@ -8,3 +8,7 @@ color.mp4
 mask.mp4
 *.mp4
 
+# Compilation stubs (only needed for building)
+angular/@angular__core.d.ts
+react/@react__stub.d.ts
+

@@ -2,4 +2,8 @@ example.html
 *.log
 .DS_Store
 node_modules
+angular/@angular__core.d.ts
+react/@react__stub.d.ts
+react/MagmaPlayer.jsx
+angular/*.ts
 

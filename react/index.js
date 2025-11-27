@@ -3,4 +3,4 @@
  */
 
 export { useMagmaPlayer } from "./useMagmaPlayer.js";
-export { MagmaPlayer } from "./MagmaPlayer.jsx";
+export { MagmaPlayer } from "./MagmaPlayer.js";
