@@ -43,7 +43,7 @@ export interface MagmaPlayerOptions {
   colorVideoSrc: string;
   /** URL to alpha mask video (MP4, grayscale) */
   maskVideoSrc: string;
-  /** 
+  /**
    * Canvas element to render to.
    * Can be:
    * - HTMLCanvasElement: Direct canvas element
@@ -63,31 +63,31 @@ export interface MagmaPlayerOptions {
   onError?: (error: MagmaPlayerError) => void;
   /** Throw error if video durations don't match (default: false) */
   strictDuration?: boolean;
-  /** 
+  /**
    * Lock canvas to fixed size (width, height in pixels).
    * Video will be scaled to fit while maintaining aspect ratio.
    * If not provided, canvas will auto-size to video dimensions.
    */
   fixedSize?: { width: number; height: number };
-  /** 
+  /**
    * Disable automatic canvas sizing (default: true).
    * If false, player will not call updateCanvasSize() automatically.
    * Ignored if fixedSize is set (fixedSize always prevents auto-sizing).
    */
   autoSize?: boolean;
-  /** 
+  /**
    * Maximum canvas size (width, height in pixels).
    * Video will be scaled down to fit while maintaining aspect ratio.
    * Ignored if fixedSize is set.
    */
   maxSize?: { width: number; height: number };
-  /** 
+  /**
    * Wait for canvas to be available before initializing (default: false).
    * Useful when canvas might not be in DOM yet (e.g., conditional rendering).
    * If true, will poll for canvas availability up to canvasTimeout.
    */
   waitForCanvas?: boolean;
-  /** 
+  /**
    * Timeout in milliseconds for waiting for canvas (default: 5000).
    * Only used if waitForCanvas is true.
    */
@@ -338,4 +338,3 @@ export class MagmaPlayer {
 
 // Default export
 export default MagmaPlayer;
-

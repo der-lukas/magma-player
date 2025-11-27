@@ -1,7 +1,21 @@
-import { Component, effect, input, OnDestroy, OnInit, output, signal, viewChild } from '@angular/core';
-import { ElementRef } from '@angular/core';
+import {
+  Component,
+  effect,
+  input,
+  OnDestroy,
+  OnInit,
+  output,
+  signal,
+  viewChild,
+} from "@angular/core";
+import { ElementRef } from "@angular/core";
 
-import { MagmaPlayer, MagmaPlayerError, ERROR_CODES, type MagmaPlayerOptions } from '../MagmaPlayer.js';
+import {
+  MagmaPlayer,
+  MagmaPlayerError,
+  ERROR_CODES,
+  type MagmaPlayerOptions,
+} from "../MagmaPlayer.js";
 
 /**
  * Angular component for MagmaPlayer integration.
@@ -20,7 +34,7 @@ import { MagmaPlayer, MagmaPlayerError, ERROR_CODES, type MagmaPlayerOptions } f
  * ```
  */
 @Component({
-  selector: 'magma-player',
+  selector: "magma-player",
   standalone: true,
   template: `<canvas #canvas></canvas>`,
   styles: [
@@ -37,7 +51,8 @@ import { MagmaPlayer, MagmaPlayerError, ERROR_CODES, type MagmaPlayerOptions } f
   ],
 })
 export class MagmaPlayerComponent implements OnInit, OnDestroy {
-  private readonly _canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('canvas');
+  private readonly _canvasRef =
+    viewChild<ElementRef<HTMLCanvasElement>>("canvas");
 
   // Required inputs
   readonly colorVideoSrc = input.required<string>();
@@ -155,19 +170,19 @@ export class MagmaPlayerComponent implements OnInit, OnDestroy {
       this._player = new MagmaPlayer(options);
 
       // Set up event listeners
-      this._player.on('play', () => {
+      this._player.on("play", () => {
         this.isPlaying.set(true);
         this.isPaused.set(false);
         this.play.emit();
       });
 
-      this._player.on('pause', () => {
+      this._player.on("pause", () => {
         this.isPlaying.set(false);
         this.isPaused.set(true);
         this.pause.emit();
       });
 
-      this._player.on('timeupdate', (time) => {
+      this._player.on("timeupdate", (time) => {
         this.currentTime.set(time);
         // Throttle timeupdate emissions to avoid excessive output events
         if (!this._timeUpdateThrottle) {
@@ -178,22 +193,22 @@ export class MagmaPlayerComponent implements OnInit, OnDestroy {
         }
       });
 
-      this._player.on('ended', () => {
+      this._player.on("ended", () => {
         this.isPlaying.set(false);
         this.isPaused.set(true);
         this.ended.emit();
       });
 
-      this._player.on('seeked', (time) => {
+      this._player.on("seeked", (time) => {
         this.currentTime.set(time);
         this.seeked.emit(time);
       });
 
-      this._player.on('warning', (warning) => {
+      this._player.on("warning", (warning) => {
         this.warning.emit(warning);
       });
 
-      this._player.on('sizechange', (size) => {
+      this._player.on("sizechange", (size) => {
         this.sizechange.emit(size);
       });
 
@@ -220,8 +235,10 @@ export class MagmaPlayerComponent implements OnInit, OnDestroy {
           ? error
           : new MagmaPlayerError(
               ERROR_CODES.INVALID_INPUT,
-              `Failed to initialize MagmaPlayer: ${error instanceof Error ? error.message : String(error)}`,
-              { originalError: error },
+              `Failed to initialize MagmaPlayer: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              { originalError: error }
             );
       this.error.emit(playerError);
     }

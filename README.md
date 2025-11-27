@@ -330,12 +330,12 @@ onUnmounted(() => {
 ### Angular (Using Component - Recommended)
 
 ```typescript
-import { Component } from '@angular/core';
-import { MagmaPlayerComponent } from './magma/angular/magma-player.component';
-import type { MagmaPlayer } from './magma/MagmaPlayer.js';
+import { Component } from "@angular/core";
+import { MagmaPlayerComponent } from "./magma/angular/magma-player.component";
+import type { MagmaPlayer } from "./magma/MagmaPlayer.js";
 
 @Component({
-  selector: 'app-video-player',
+  selector: "app-video-player",
   standalone: true,
   imports: [MagmaPlayerComponent],
   template: `
@@ -361,25 +361,25 @@ export class VideoPlayerComponent {
   playerRef: MagmaPlayerComponent | null = null;
 
   onPlayerReady(player: MagmaPlayer) {
-    console.log('Player ready:', player);
+    console.log("Player ready:", player);
     // Access the component instance to control playback
     // Note: You'll need to use @ViewChild to get the component reference
   }
 
   onPlayerError(error: any) {
-    console.error('Player error:', error);
+    console.error("Player error:", error);
   }
 
   onPlay() {
-    console.log('Playing');
+    console.log("Playing");
   }
 
   onPause() {
-    console.log('Paused');
+    console.log("Paused");
   }
 
   onTimeUpdate(time: number) {
-    console.log('Time:', time);
+    console.log("Time:", time);
   }
 }
 ```
@@ -387,11 +387,11 @@ export class VideoPlayerComponent {
 **With ViewChild for programmatic control:**
 
 ```typescript
-import { Component, ViewChild } from '@angular/core';
-import { MagmaPlayerComponent } from './magma/angular/magma-player.component';
+import { Component, ViewChild } from "@angular/core";
+import { MagmaPlayerComponent } from "./magma/angular/magma-player.component";
 
 @Component({
-  selector: 'app-video-player',
+  selector: "app-video-player",
   standalone: true,
   imports: [MagmaPlayerComponent],
   template: `
@@ -407,7 +407,7 @@ import { MagmaPlayerComponent } from './magma/angular/magma-player.component';
   `,
 })
 export class VideoPlayerComponent {
-  @ViewChild('player') player!: MagmaPlayerComponent;
+  @ViewChild("player") player!: MagmaPlayerComponent;
 }
 ```
 
@@ -415,14 +415,14 @@ export class VideoPlayerComponent {
 
 ```typescript
 // Access reactive state
-player.isPlaying()      // Signal<boolean>
-player.isReady()        // Signal<boolean>
-player.currentTime()    // Signal<number>
-player.duration()       // Signal<number>
-player.videoWidth()     // Signal<number>
-player.videoHeight()    // Signal<number>
-player.volume()         // Signal<number>
-player.playbackRate()   // Signal<number>
+player.isPlaying(); // Signal<boolean>
+player.isReady(); // Signal<boolean>
+player.currentTime(); // Signal<number>
+player.duration(); // Signal<number>
+player.videoWidth(); // Signal<number>
+player.videoHeight(); // Signal<number>
+player.volume(); // Signal<number>
+player.playbackRate(); // Signal<number>
 ```
 
 ### Angular (Direct Usage - Full Control)
@@ -430,15 +430,22 @@ player.playbackRate()   // Signal<number>
 Use `new MagmaPlayer()` directly when you need full control over the lifecycle:
 
 ```typescript
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
-import { MagmaPlayer } from './magma/MagmaPlayer.js';
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+} from "@angular/core";
+import { MagmaPlayer } from "./magma/MagmaPlayer.js";
 
 @Component({
-  selector: 'app-video-player',
+  selector: "app-video-player",
   template: `<canvas #canvas></canvas>`,
 })
 export class VideoPlayerComponent implements OnInit, OnDestroy {
-  @ViewChild('canvas', { static: false }) canvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild("canvas", { static: false })
+  canvasRef!: ElementRef<HTMLCanvasElement>;
   private player: MagmaPlayer | null = null;
 
   ngOnInit() {
@@ -446,15 +453,15 @@ export class VideoPlayerComponent implements OnInit, OnDestroy {
     setTimeout(() => {
       if (this.canvasRef?.nativeElement) {
         this.player = new MagmaPlayer({
-          colorVideoSrc: 'color.mp4',
-          maskVideoSrc: 'mask.mp4',
+          colorVideoSrc: "color.mp4",
+          maskVideoSrc: "mask.mp4",
           canvas: this.canvasRef.nativeElement,
           useWebGL: true,
           autoplay: false,
         });
 
-        this.player.on('ready', () => console.log('Ready'));
-        this.player.on('error', (error) => console.error('Error:', error));
+        this.player.on("ready", () => console.log("Ready"));
+        this.player.on("error", (error) => console.error("Error:", error));
       }
     });
   }
