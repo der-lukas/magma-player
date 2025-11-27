@@ -1,0 +1,53 @@
+{
+  "name": "magma-player",
+  "version": "1.0.0",
+  "description": "A reusable library for compositing color and alpha mask videos with perfect synchronization using a shared clock",
+  "main": "MagmaPlayer.js",
+  "module": "MagmaPlayer.js",
+  "types": "MagmaPlayer.d.ts",
+  "browser": "dist/magma-player.umd.js",
+  "exports": {
+    ".": {
+      "browser": "./dist/magma-player.umd.js",
+      "import": "./MagmaPlayer.js",
+      "require": "./dist/magma-player.cjs.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "MagmaPlayer.js",
+    "MagmaPlayer.d.ts",
+    "index.js",
+    "index.d.ts",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "npm run build:cjs && npm run build:umd",
+    "build:cjs": "esbuild MagmaPlayer.js --bundle --format=cjs --outfile=dist/magma-player.cjs.js --platform=browser",
+    "build:umd": "esbuild MagmaPlayer.js --bundle --format=iife --global-name=MagmaPlayer --outfile=dist/magma-player.umd.js --platform=browser --minify",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "video",
+    "alpha",
+    "mask",
+    "compositing",
+    "webgl",
+    "canvas",
+    "synchronization",
+    "transparency",
+    "mp4",
+    "video-player"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/magma-player.git"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

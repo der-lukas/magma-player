@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Magma Player Example</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 2rem;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: #f5f5f5;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2rem;
+      }
+
+      h1 {
+        margin: 0;
+        color: #333;
+      }
+
+      .player-container {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      canvas {
+        display: block;
+        max-width: 100%;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      .controls {
+        margin-top: 1rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: center;
+        align-items: center;
+      }
+
+      button {
+        padding: 0.5rem 1rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: white;
+        cursor: pointer;
+        font-size: 0.9rem;
+      }
+
+      button:hover {
+        background: #f5f5f5;
+      }
+
+      .control-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        border: 1px solid #eee;
+        border-radius: 4px;
+      }
+
+      .control-group label {
+        font-size: 0.85rem;
+        color: #666;
+      }
+
+      input[type="range"] {
+        width: 100px;
+      }
+
+      .info {
+        max-width: 600px;
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      .info code {
+        background: #f5f5f5;
+        padding: 0.2rem 0.4rem;
+        border-radius: 3px;
+        font-size: 0.9em;
+      }
+
+      .status {
+        margin-top: 1rem;
+        padding: 0.5rem;
+        background: #f0f0f0;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        color: #666;
+      }
+
+      .event-log {
+        margin-top: 1rem;
+        padding: 0.5rem;
+        background: #f9f9f9;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        max-height: 150px;
+        overflow-y: auto;
+        font-family: monospace;
+      }
+
+      .event-log-item {
+        padding: 0.2rem 0;
+        border-bottom: 1px solid #eee;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Magma Player Example</h1>
+
+    <div class="player-container">
+      <canvas id="magma-canvas"></canvas>
+      <div class="controls">
+        <button id="play-btn">Play</button>
+        <button id="pause-btn">Pause</button>
+        <button id="reset-btn">Reset</button>
+        <button id="seek-btn">Seek to 2s</button>
+
+        <div class="control-group">
+          <label>Volume:</label>
+          <input
+            type="range"
+            id="volume-slider"
+            min="0"
+            max="100"
+            value="100"
+          />
+          <span id="volume-value">100%</span>
+        </div>
+
+        <div class="control-group">
+          <label>Speed:</label>
+          <input
+            type="range"
+            id="speed-slider"
+            min="25"
+            max="400"
+            value="100"
+          />
+          <span id="speed-value">1.0x</span>
+        </div>
+
+        <div class="control-group">
+          <label>
+            <input type="checkbox" id="loop-checkbox" checked />
+            Loop
+          </label>
+        </div>
+      </div>
+
+      <div class="status" id="status">Status: Initializing...</div>
+
+      <div class="event-log" id="event-log">
+        <div class="event-log-item">Event log will appear here...</div>
+      </div>
+    </div>
+
+    <div class="info">
+      <h2>How to Use</h2>
+      <p><strong>Note:</strong> This example requires two MP4 video files:</p>
+      <ul style="margin: 0.5rem 0; padding-left: 1.5rem">
+        <li><code>color.mp4</code> - Your color video (RGB)</li>
+        <li><code>mask.mp4</code> - Your alpha mask video (grayscale)</li>
+      </ul>
+      <p>
+        Place these files in the same directory as this HTML file, or update the
+        paths in the code below to point to your video files.
+      </p>
+      <p
+        style="
+          background: #fff3cd;
+          padding: 0.75rem;
+          border-radius: 4px;
+          border-left: 4px solid #ffc107;
+          margin-top: 1rem;
+        "
+      >
+        <strong>⚠️ CORS Warning:</strong> If you're opening this file directly
+        (file://), browsers may block video loading due to CORS restrictions.
+        <strong>Use a local web server instead:</strong><br />
+        <code
+          style="
+            background: #f5f5f5;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+          "
+        >
+          cd src/magma && python3 -m http.server 8000 </code
+        ><br />
+        Then open <code>http://localhost:8000/example.html</code> in your
+        browser.
+      </p>
+      <pre><code>const player = new MagmaPlayer({
+  colorVideoSrc: 'color.mp4',
+  maskVideoSrc: 'mask.mp4',
+  canvas: document.getElementById('magma-canvas'),
+  autoplay: false, // Control playback manually
+  targetFPS: 60,   // Frame rate (30/24 for battery saving)
+  onReady: () => console.log('Ready!'),
+  onError: (error) => console.error('Error:', error)
+});
+
+// Listen to events
+player.on('play', () => console.log('Playing'));
+player.on('pause', () => console.log('Paused'));
+player.on('timeupdate', (time) => console.log('Time:', time));
+
+// Control playback
+player.play();
+player.pause();
+player.seek(5);
+player.reset();
+
+// Volume and speed
+player.setVolume(0.5);
+player.setPlaybackRate(1.5);
+
+// Hover interaction example
+canvas.addEventListener('mouseenter', () => player.play());
+canvas.addEventListener('mouseleave', () => player.reset());</code></pre>
+    </div>
+
+    <!-- Use ES Module (no build step needed, works directly) -->
+    <script type="module">
+      import { MagmaPlayer } from "./MagmaPlayer.js";
+
+      const canvas = document.getElementById("magma-canvas");
+      const playBtn = document.getElementById("play-btn");
+      const pauseBtn = document.getElementById("pause-btn");
+      const resetBtn = document.getElementById("reset-btn");
+      const seekBtn = document.getElementById("seek-btn");
+      const volumeSlider = document.getElementById("volume-slider");
+      const volumeValue = document.getElementById("volume-value");
+      const speedSlider = document.getElementById("speed-slider");
+      const speedValue = document.getElementById("speed-value");
+      const loopCheckbox = document.getElementById("loop-checkbox");
+      const status = document.getElementById("status");
+      const eventLog = document.getElementById("event-log");
+
+      let player = null;
+
+      function logEvent(event, data) {
+        const item = document.createElement("div");
+        item.className = "event-log-item";
+        item.textContent = `[${new Date().toLocaleTimeString()}] ${event}${
+          data ? `: ${data}` : ""
+        }`;
+        eventLog.insertBefore(item, eventLog.firstChild);
+        // Keep only last 20 events
+        while (eventLog.children.length > 20) {
+          eventLog.removeChild(eventLog.lastChild);
+        }
+      }
+
+      function updateStatus() {
+        if (!player) return;
+        const time = player.getCurrentTime().toFixed(2);
+        const duration = player.getDuration().toFixed(2);
+        const playing = player.isPlaying() ? "Playing" : "Paused";
+        status.textContent = `Status: ${playing} | Time: ${time}s / ${duration}s`;
+      }
+
+      // Initialize player
+      // IMPORTANT: Place your color.mp4 and mask.mp4 files in the same directory as this HTML file
+      // Or update these paths to point to your video files
+      try {
+        player = new MagmaPlayer({
+          colorVideoSrc: "color.mp4", // Path to your color video (RGB MP4)
+          maskVideoSrc: "mask.mp4", // Path to your mask video (grayscale MP4)
+          canvas: canvas,
+          useWebGL: true,
+          autoplay: false, // Don't autoplay - demonstrate manual control
+          targetFPS: 60,
+          onReady: () => {
+            logEvent("ready");
+            updateStatus();
+          },
+          onError: (error) => {
+            logEvent("error", error.message || String(error));
+            const errorMsg = error.message || String(error);
+            if (
+              errorMsg.includes("CORS") ||
+              errorMsg.includes("Failed to load")
+            ) {
+              alert(
+                "Error loading videos. This might be a CORS issue.\n\n" +
+                  "Try one of these solutions:\n" +
+                  "1. Use a local web server (e.g., 'python -m http.server' or 'npx serve')\n" +
+                  "2. Make sure color.mp4 and mask.mp4 are in the same folder as this HTML file\n" +
+                  "3. Check browser console for detailed error messages"
+              );
+            } else {
+              alert(
+                "Error loading videos: " +
+                  errorMsg +
+                  "\n\nMake sure the video URLs are correct and the files exist."
+              );
+            }
+          },
+        });
+      } catch (error) {
+        logEvent("error", error.message || String(error));
+        alert(
+          "Failed to initialize MagmaPlayer: " +
+            (error.message || String(error))
+        );
+      }
+
+      // Event listeners
+      player.on("ready", () => {
+        logEvent("ready");
+        updateStatus();
+      });
+      player.on("play", () => {
+        logEvent("play");
+        updateStatus();
+      });
+      player.on("pause", () => {
+        logEvent("pause");
+        updateStatus();
+      });
+      player.on("timeupdate", (time) => {
+        updateStatus();
+      });
+      player.on("ended", () => {
+        logEvent("ended");
+        updateStatus();
+      });
+      player.on("seeked", (time) => {
+        logEvent("seeked", `${time.toFixed(2)}s`);
+        updateStatus();
+      });
+      player.on("error", (error) => {
+        logEvent("error", error.message);
+      });
+
+      // Control buttons
+      playBtn.addEventListener("click", () => player.play());
+      pauseBtn.addEventListener("click", () => player.pause());
+      resetBtn.addEventListener("click", () => player.reset());
+      seekBtn.addEventListener("click", () => player.seek(2));
+
+      // Volume control
+      volumeSlider.addEventListener("input", (e) => {
+        const volume = e.target.value / 100;
+        player.setVolume(volume);
+        volumeValue.textContent = `${e.target.value}%`;
+      });
+
+      // Playback speed control
+      speedSlider.addEventListener("input", (e) => {
+        const rate = e.target.value / 100;
+        player.setPlaybackRate(rate);
+        speedValue.textContent = `${rate.toFixed(1)}x`;
+      });
+
+      // Loop control
+      loopCheckbox.addEventListener("change", (e) => {
+        player.setLoop(e.target.checked);
+        logEvent("loop", e.target.checked ? "enabled" : "disabled");
+      });
+
+      // Hover interaction example
+      canvas.addEventListener("mouseenter", () => {
+        if (!player.isPlaying()) {
+          player.play();
+        }
+      });
+      canvas.addEventListener("mouseleave", () => {
+        player.reset();
+      });
+
+      // Update status periodically
+      setInterval(updateStatus, 100);
+    </script>
+
+    <!-- Alternative: UMD/Global build (requires build step: npm run build:umd) -->
+    <!--
+    <script src="./dist/magma-player.umd.js"></script>
+    <script>
+      const player = new MagmaPlayer.MagmaPlayer({ ... });
+    </script>
+    -->
+  </body>
+</html>

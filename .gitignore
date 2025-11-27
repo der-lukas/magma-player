@@ -1,0 +1,10 @@
+dist/
+node_modules/
+*.log
+.DS_Store
+
+# Example video files (users should provide their own)
+color.mp4
+mask.mp4
+*.mp4
+
