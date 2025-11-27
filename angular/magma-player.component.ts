@@ -66,6 +66,7 @@ export class MagmaPlayerComponent implements OnInit, OnDestroy {
   readonly targetFPS = input<number>(60);
   readonly autoSize = input<boolean>(true);
   readonly strictDuration = input<boolean>(false);
+  readonly pauseWhenHidden = input<boolean>(true);
   readonly repeatCount = input<number>();
 
   // Outputs
@@ -155,6 +156,7 @@ export class MagmaPlayerComponent implements OnInit, OnDestroy {
         targetFPS: this.targetFPS(),
         autoSize: this.autoSize(),
         strictDuration: this.strictDuration(),
+        pauseWhenHidden: this.pauseWhenHidden(),
         onReady: () => {
           this.isReady.set(true);
           if (this._player) {

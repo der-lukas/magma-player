@@ -92,6 +92,12 @@ export interface MagmaPlayerOptions {
    * Only used if waitForCanvas is true.
    */
   canvasTimeout?: number;
+  /**
+   * Pause rendering when canvas is not visible (default: true).
+   * Uses IntersectionObserver to detect visibility and skip rendering when off-screen.
+   * Set to false to always render, even when canvas is not visible.
+   */
+  pauseWhenHidden?: boolean;
 }
 
 /**

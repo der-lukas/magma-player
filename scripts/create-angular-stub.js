@@ -1,5 +1,5 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
 const stubContent = `// Stub type definitions for compilation only
 // Angular is a peer dependency and will be provided by the consuming project
@@ -35,6 +35,5 @@ declare module '@angular/core' {
 }
 `;
 
-const stubPath = path.join(__dirname, '../angular/@angular__core.d.ts');
+const stubPath = path.join(__dirname, "../angular/@angular__core.d.ts");
 fs.writeFileSync(stubPath, stubContent);
-

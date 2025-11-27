@@ -15,6 +15,7 @@ function useMagmaPlayer(options = {}) {
     fixedSize,
     maxSize,
     autoSize = true,
+    pauseWhenHidden = true,
     onReady,
     onError,
     onPlay,
@@ -78,6 +79,7 @@ function useMagmaPlayer(options = {}) {
       fixedSize,
       maxSize,
       autoSize,
+      pauseWhenHidden,
       onReady: () => {
         setIsReady(true);
         if (playerRef.current) {
@@ -211,6 +213,7 @@ var MagmaPlayer2 = React.forwardRef(function MagmaPlayer3({
   fixedSize,
   maxSize,
   autoSize = true,
+  pauseWhenHidden = true,
   onReady,
   onError,
   onPlay,
@@ -247,6 +250,7 @@ var MagmaPlayer2 = React.forwardRef(function MagmaPlayer3({
     fixedSize,
     maxSize,
     autoSize,
+    pauseWhenHidden,
     onReady,
     onError,
     onPlay,

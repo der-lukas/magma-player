@@ -496,6 +496,7 @@ new MagmaPlayer({
   onReady?: () => void,        // Callback when player is ready
   onError?: (error) => void,   // Callback for errors (receives MagmaPlayerError)
   strictDuration?: boolean,    // Throw error if video durations don't match (default: false)
+  pauseWhenHidden?: boolean,   // Pause rendering when canvas is not visible (default: true)
 })
 ```
 

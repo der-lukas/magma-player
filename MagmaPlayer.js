@@ -50,6 +50,7 @@ export class MagmaPlayer {
     maxSize,
     waitForCanvas = false,
     canvasTimeout = 5000,
+    pauseWhenHidden = true,
   }) {
     // Store canvas getter/selector for later resolution
     this._canvasInput = canvas;
@@ -72,6 +73,7 @@ export class MagmaPlayer {
       maxSize,
       waitForCanvas,
       canvasTimeout,
+      pauseWhenHidden,
     });
 
     this.colorVideoSrc = colorVideoSrc;
@@ -85,6 +87,7 @@ export class MagmaPlayer {
     this.fixedSize = fixedSize;
     this.maxSize = maxSize;
     this.autoSize = fixedSize ? false : autoSize; // fixedSize overrides autoSize
+    this.pauseWhenHidden = pauseWhenHidden;
 
     // Resolve canvas immediately or wait for it
     this.canvas = this._resolveCanvas(canvas);
@@ -112,6 +115,7 @@ export class MagmaPlayer {
     this._readyCallbackCalled = false; // Track if onReady callback has been called
     this._initializing = false; // Track if init is in progress
     this._initPromise = null; // Store init promise to prevent concurrent initialization
+    this._firstFrameRendered = false; // Track if first frame has been rendered
 
     // Performance optimizations
     this.lastColorFrameTime = -1;
@@ -253,6 +257,7 @@ export class MagmaPlayer {
     maxSize,
     waitForCanvas,
     canvasTimeout,
+    pauseWhenHidden,
   }) {
     if (!colorVideoSrc || typeof colorVideoSrc !== "string") {
       throw new MagmaPlayerError(
@@ -412,6 +417,14 @@ export class MagmaPlayer {
         );
       }
     }
+
+    if (pauseWhenHidden !== undefined && typeof pauseWhenHidden !== "boolean") {
+      throw new MagmaPlayerError(
+        ERROR_CODES.INVALID_INPUT,
+        "pauseWhenHidden must be a boolean",
+        { received: typeof pauseWhenHidden }
+      );
+    }
   }
 
   async init() {
@@ -550,6 +563,30 @@ export class MagmaPlayer {
         });
       }
 
+      // Set up early first frame rendering when we have metadata
+      const tryFirstFrameOnMetadata = () => {
+        if (
+          this.colorVideo.videoWidth &&
+          this.colorVideo.videoHeight &&
+          this.maskVideo.videoWidth &&
+          this.maskVideo.videoHeight
+        ) {
+          // We have dimensions, try to render first frame when we have frame data
+          this._tryRenderFirstFrame();
+        }
+      };
+
+      this.colorVideo.addEventListener(
+        "loadedmetadata",
+        tryFirstFrameOnMetadata,
+        { once: true }
+      );
+      this.maskVideo.addEventListener(
+        "loadedmetadata",
+        tryFirstFrameOnMetadata,
+        { once: true }
+      );
+
       // Wait for videos to load with timeout
       await Promise.all([
         new Promise((resolve, reject) => {
@@ -629,7 +666,12 @@ export class MagmaPlayer {
               checkAndResolve,
               { once: true }
             );
-            this.colorVideo.addEventListener("loadeddata", checkAndResolve, {
+            const firstFrameHandler = () => {
+              this._tryRenderFirstFrame();
+              checkAndResolve();
+            };
+
+            this.colorVideo.addEventListener("loadeddata", firstFrameHandler, {
               once: true,
             });
             this.colorVideo.addEventListener("canplay", checkAndResolve, {
@@ -768,7 +810,11 @@ export class MagmaPlayer {
             this.maskVideo.addEventListener("loadedmetadata", checkAndResolve, {
               once: true,
             });
-            this.maskVideo.addEventListener("loadeddata", checkAndResolve, {
+            const firstFrameHandler = () => {
+              this._tryRenderFirstFrame();
+              checkAndResolve();
+            };
+            this.maskVideo.addEventListener("loadeddata", firstFrameHandler, {
               once: true,
             });
             this.maskVideo.addEventListener("canplay", checkAndResolve, {
@@ -860,8 +906,10 @@ export class MagmaPlayer {
         this.updateCanvasSize();
       }
 
-      // Set up visibility observer to pause rendering when not visible
-      this.setupVisibilityObserver();
+      // Set up visibility observer to pause rendering when not visible (if enabled)
+      if (this.pauseWhenHidden) {
+        this.setupVisibilityObserver();
+      }
 
       this.start();
 
@@ -1734,6 +1782,134 @@ export class MagmaPlayer {
     }
   }
 
+  /**
+   * Try to render the first frame as soon as we have frame data from both videos
+   * This provides immediate visual feedback while videos continue loading
+   *
+   * Note: This renders regardless of visibility state (isVisible) because it's
+   * a static poster that should be shown even if the canvas is off-screen initially.
+   * The intersection observer only affects the animation loop, not this first frame.
+   *
+   * @private
+   */
+  _tryRenderFirstFrame() {
+    // Only render once
+    if (this._firstFrameRendered) return;
+
+    // Need both videos to have at least some frame data
+    if (
+      !this.colorVideo ||
+      !this.maskVideo ||
+      this.colorVideo.readyState < 1 ||
+      this.maskVideo.readyState < 1
+    ) {
+      return;
+    }
+
+    // Need video dimensions
+    if (
+      !this.colorVideo.videoWidth ||
+      !this.colorVideo.videoHeight ||
+      !this.maskVideo.videoWidth ||
+      !this.maskVideo.videoHeight
+    ) {
+      return;
+    }
+
+    // Need rendering context
+    if (!this.gl && !this.ctx) {
+      return;
+    }
+
+    // Check if canvas is in DOM (needed for intersection observer to work properly)
+    if (!this.canvas.isConnected) {
+      return;
+    }
+
+    try {
+      // Set canvas size if not already set
+      if (this.canvas.width === 0 || this.canvas.height === 0) {
+        if (this.fixedSize) {
+          const { width, height } = this.fixedSize;
+          const internalWidth = width * this.pixelRatio;
+          const internalHeight = height * this.pixelRatio;
+          this.canvas.width = internalWidth;
+          this.canvas.height = internalHeight;
+          this.canvas.style.width = `${width}px`;
+          this.canvas.style.height = `${height}px`;
+        } else {
+          // Use video dimensions
+          const videoWidth = this.colorVideo.videoWidth;
+          const videoHeight = this.colorVideo.videoHeight;
+          const internalWidth = videoWidth * this.pixelRatio;
+          const internalHeight = videoHeight * this.pixelRatio;
+          this.canvas.width = internalWidth;
+          this.canvas.height = internalHeight;
+          this.canvas.style.width = `${videoWidth}px`;
+          this.canvas.style.height = `${videoHeight}px`;
+        }
+
+        // Set viewport/transform
+        if (this.gl) {
+          this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+        } else if (this.ctx) {
+          this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+          this.ctx.scale(this.pixelRatio, this.pixelRatio);
+        }
+      }
+
+      // Ensure videos are at time 0 for first frame
+      // Only seek if they're not already at 0 (to avoid unnecessary seeks)
+      if (Math.abs(this.colorVideo.currentTime) > 0.01) {
+        this.colorVideo.currentTime = 0;
+      }
+      if (Math.abs(this.maskVideo.currentTime) > 0.01) {
+        this.maskVideo.currentTime = 0;
+      }
+
+      // Wait for seek to complete, then render
+      // Use a small timeout to ensure seek completes
+      setTimeout(() => {
+        // Double-check we still have the data and context
+        if (
+          this.colorVideo &&
+          this.maskVideo &&
+          this.colorVideo.readyState >= 1 &&
+          this.maskVideo.readyState >= 1 &&
+          this.canvas.width > 0 &&
+          this.canvas.height > 0 &&
+          !this._firstFrameRendered
+        ) {
+          try {
+            // For WebGL, make sure it's fully initialized
+            if (this.gl && this.program) {
+              // Ensure textures exist
+              if (!this.colorTexture) {
+                this.colorTexture = this.createTexture();
+              }
+              if (!this.alphaTexture) {
+                this.alphaTexture = this.createTexture();
+              }
+              // Render using WebGL
+              this.renderWebGL();
+            } else if (this.ctx) {
+              // Render using Canvas2D
+              this.renderCanvas2D();
+            }
+
+            this._firstFrameRendered = true;
+          } catch (error) {
+            // Silently fail - first frame rendering is optional
+            // The normal render loop will handle it once fully loaded
+          }
+        }
+      }, 50); // Small delay to ensure seek completes
+    } catch (error) {
+      // Silently fail - first frame rendering is optional
+      // The normal render loop will handle it once fully loaded
+    }
+  }
+
   renderCanvas2D() {
     try {
       const ctx = this.ctx;
@@ -2212,9 +2388,25 @@ export class MagmaPlayer {
         },
         {
           threshold: 0, // Trigger when any part is visible
+          rootMargin: "0px", // No margin - check exact intersection
         }
       );
       this.visibilityObserver.observe(this.canvas);
+
+      // Initial visibility check - ensure isVisible is set correctly from the start
+      // This helps with first frame rendering and initial state
+      // Use requestAnimationFrame to ensure the observer has had a chance to observe
+      requestAnimationFrame(() => {
+        const records = this.visibilityObserver?.takeRecords();
+        if (records && records.length > 0) {
+          const entry = records[0];
+          this.isVisible = entry.isIntersecting && entry.intersectionRatio > 0;
+        } else {
+          // Fallback: check if canvas has dimensions (likely visible)
+          const rect = this.canvas.getBoundingClientRect();
+          this.isVisible = rect.width > 0 && rect.height > 0;
+        }
+      });
     } else {
       // Fallback: check display style
       const checkVisibility = () => {
@@ -2314,6 +2506,7 @@ export class MagmaPlayer {
     // Reset internal flags
     this._readyEmitted = false;
     this._readyCallbackCalled = false;
+    this._firstFrameRendered = false;
     this.isInitialized = false;
   }
 }

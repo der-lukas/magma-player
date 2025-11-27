@@ -39,6 +39,7 @@ import { MagmaPlayer } from "../MagmaPlayer.js";
  * @property {{width: number, height: number}} [fixedSize] - Lock canvas to fixed size
  * @property {{width: number, height: number}} [maxSize] - Maximum canvas size
  * @property {boolean} [autoSize=true] - Enable automatic canvas sizing
+ * @property {boolean} [pauseWhenHidden=true] - Pause rendering when canvas is not visible
  * @property {Function} [onReady] - Callback when player is ready
  * @property {Function} [onError] - Callback for errors
  * @property {Function} [onPlay] - Callback when playback starts
@@ -63,6 +64,7 @@ export function useMagmaPlayer(options = {}) {
     fixedSize,
     maxSize,
     autoSize = true,
+    pauseWhenHidden = true,
     onReady,
     onError,
     onPlay,
@@ -139,6 +141,7 @@ export function useMagmaPlayer(options = {}) {
       fixedSize,
       maxSize,
       autoSize,
+      pauseWhenHidden,
       onReady: () => {
         setIsReady(true);
         if (playerRef.current) {

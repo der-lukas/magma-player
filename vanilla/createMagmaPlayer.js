@@ -37,6 +37,7 @@ import { MagmaPlayer } from "../MagmaPlayer.js";
  * @param {Object} [options.maxSize] - Max canvas size {width, height}
  * @param {boolean} [options.autoSize=true] - Enable automatic canvas sizing
  * @param {boolean} [options.strictDuration=false] - Throw error if video durations don't match
+ * @param {boolean} [options.pauseWhenHidden=true] - Pause rendering when canvas is not visible
  * @param {boolean} [options.autoCleanup=true] - Automatically cleanup on page unload
  * @param {Function} [options.onReady] - Ready callback
  * @param {Function} [options.onError] - Error callback
@@ -66,6 +67,7 @@ export function createMagmaPlayer(options = {}) {
     maxSize,
     autoSize = true,
     strictDuration = false,
+    pauseWhenHidden = true,
     autoCleanup = true,
     onReady,
     onError,
@@ -98,6 +100,7 @@ export function createMagmaPlayer(options = {}) {
     maxSize,
     autoSize,
     strictDuration,
+    pauseWhenHidden,
     onReady,
     onError,
   });

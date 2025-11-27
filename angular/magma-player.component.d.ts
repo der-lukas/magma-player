@@ -33,6 +33,7 @@ export declare class MagmaPlayerComponent implements OnInit, OnDestroy {
     readonly targetFPS: () => number;
     readonly autoSize: () => boolean;
     readonly strictDuration: () => boolean;
+    readonly pauseWhenHidden: () => boolean;
     readonly repeatCount: () => number;
     readonly ready: {
         emit: (value: MagmaPlayer) => void;

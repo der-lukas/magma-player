@@ -29,6 +29,7 @@ import { useMagmaPlayer } from "./useMagmaPlayer.js";
  * @property {{width: number, height: number}} [fixedSize] - Lock canvas to fixed size
  * @property {{width: number, height: number}} [maxSize] - Maximum canvas size
  * @property {boolean} [autoSize=true] - Enable automatic canvas sizing
+ * @property {boolean} [pauseWhenHidden=true] - Pause rendering when canvas is not visible
  * @property {Function} [onReady] - Callback when player is ready (receives player instance)
  * @property {Function} [onError] - Callback for errors
  * @property {Function} [onPlay] - Callback when playback starts
@@ -59,6 +60,7 @@ export const MagmaPlayer = React.forwardRef(function MagmaPlayer(
     fixedSize,
     maxSize,
     autoSize = true,
+    pauseWhenHidden = true,
     onReady,
     onError,
     onPlay,
@@ -97,6 +99,7 @@ export const MagmaPlayer = React.forwardRef(function MagmaPlayer(
     fixedSize,
     maxSize,
     autoSize,
+    pauseWhenHidden,
     onReady,
     onError,
     onPlay,
