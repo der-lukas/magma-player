@@ -22,7 +22,7 @@ A reusable library for compositing color and alpha mask videos with perfect sync
 ### Option 1: npm
 
 ```bash
-npm install magma-player
+npm install @der-lukas/magma-player
 ```
 
 ### Option 2: Copy files directly
@@ -157,7 +157,7 @@ import {
   MagmaPlayer,
   MagmaPlayerError,
   ERROR_CODES,
-} from "@webp-utility/magma-player";
+} from "@der-lukas/magma-player";
 // Or: import { MagmaPlayer, MagmaPlayerError, ERROR_CODES } from './magma/MagmaPlayer.js';
 
 const canvas = document.getElementById("player-canvas") as HTMLCanvasElement;
@@ -301,7 +301,7 @@ function VideoPlayer({ colorSrc, maskSrc }) {
 
 <script setup>
 import { ref, onMounted, onUnmounted } from "vue";
-import { MagmaPlayer } from "@webp-utility/magma-player";
+import { MagmaPlayer } from "@der-lukas/magma-player";
 // Or: import { MagmaPlayer } from './magma/MagmaPlayer.js';
 
 const canvas = ref(null);
