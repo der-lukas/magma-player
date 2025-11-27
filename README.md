@@ -327,6 +327,144 @@ onUnmounted(() => {
 </script>
 ```
 
+### Angular (Using Component - Recommended)
+
+```typescript
+import { Component } from '@angular/core';
+import { MagmaPlayerComponent } from './magma/angular/magma-player.component';
+import type { MagmaPlayer } from './magma/MagmaPlayer.js';
+
+@Component({
+  selector: 'app-video-player',
+  standalone: true,
+  imports: [MagmaPlayerComponent],
+  template: `
+    <magma-player
+      [colorVideoSrc]="'color.mp4'"
+      [maskVideoSrc]="'mask.mp4'"
+      [fixedSize]="{ width: 800, height: 600 }"
+      [autoplay]="false"
+      [useWebGL]="true"
+      [repeatCount]="-1"
+      (ready)="onPlayerReady($event)"
+      (error)="onPlayerError($event)"
+      (play)="onPlay()"
+      (pause)="onPause()"
+      (timeupdate)="onTimeUpdate($event)"
+    />
+    <button (click)="playerRef?.startPlayback()">Play</button>
+    <button (click)="playerRef?.pausePlayback()">Pause</button>
+    <button (click)="playerRef?.setRepeatCount(3)">Repeat 3x</button>
+  `,
+})
+export class VideoPlayerComponent {
+  playerRef: MagmaPlayerComponent | null = null;
+
+  onPlayerReady(player: MagmaPlayer) {
+    console.log('Player ready:', player);
+    // Access the component instance to control playback
+    // Note: You'll need to use @ViewChild to get the component reference
+  }
+
+  onPlayerError(error: any) {
+    console.error('Player error:', error);
+  }
+
+  onPlay() {
+    console.log('Playing');
+  }
+
+  onPause() {
+    console.log('Paused');
+  }
+
+  onTimeUpdate(time: number) {
+    console.log('Time:', time);
+  }
+}
+```
+
+**With ViewChild for programmatic control:**
+
+```typescript
+import { Component, ViewChild } from '@angular/core';
+import { MagmaPlayerComponent } from './magma/angular/magma-player.component';
+
+@Component({
+  selector: 'app-video-player',
+  standalone: true,
+  imports: [MagmaPlayerComponent],
+  template: `
+    <magma-player
+      #player
+      [colorVideoSrc]="'color.mp4'"
+      [maskVideoSrc]="'mask.mp4'"
+      [autoplay]="false"
+    />
+    <button (click)="player.startPlayback()">Play</button>
+    <button (click)="player.pausePlayback()">Pause</button>
+    <button (click)="player.seek(10)">Seek to 10s</button>
+  `,
+})
+export class VideoPlayerComponent {
+  @ViewChild('player') player!: MagmaPlayerComponent;
+}
+```
+
+**Reactive signals available on the component:**
+
+```typescript
+// Access reactive state
+player.isPlaying()      // Signal<boolean>
+player.isReady()        // Signal<boolean>
+player.currentTime()    // Signal<number>
+player.duration()       // Signal<number>
+player.videoWidth()     // Signal<number>
+player.videoHeight()    // Signal<number>
+player.volume()         // Signal<number>
+player.playbackRate()   // Signal<number>
+```
+
+### Angular (Direct Usage - Full Control)
+
+Use `new MagmaPlayer()` directly when you need full control over the lifecycle:
+
+```typescript
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { MagmaPlayer } from './magma/MagmaPlayer.js';
+
+@Component({
+  selector: 'app-video-player',
+  template: `<canvas #canvas></canvas>`,
+})
+export class VideoPlayerComponent implements OnInit, OnDestroy {
+  @ViewChild('canvas', { static: false }) canvasRef!: ElementRef<HTMLCanvasElement>;
+  private player: MagmaPlayer | null = null;
+
+  ngOnInit() {
+    // Wait for view to initialize
+    setTimeout(() => {
+      if (this.canvasRef?.nativeElement) {
+        this.player = new MagmaPlayer({
+          colorVideoSrc: 'color.mp4',
+          maskVideoSrc: 'mask.mp4',
+          canvas: this.canvasRef.nativeElement,
+          useWebGL: true,
+          autoplay: false,
+        });
+
+        this.player.on('ready', () => console.log('Ready'));
+        this.player.on('error', (error) => console.error('Error:', error));
+      }
+    });
+  }
+
+  ngOnDestroy() {
+    this.player?.destroy();
+  }
+}
+```
+
 ## API
 
 ### Constructor Options
