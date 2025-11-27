@@ -13,7 +13,10 @@
       "require": "./dist/magma-player.cjs.js"
     },
     "./react": "./react/index.js",
-    "./angular": "./angular/index.ts",
+    "./angular": {
+      "import": "./angular/index.ts",
+      "types": "./angular/index.d.ts"
+    },
     "./vanilla": "./vanilla/index.js",
     "./package.json": "./package.json"
   },
