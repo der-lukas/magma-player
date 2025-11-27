@@ -19,7 +19,7 @@ A reusable library for compositing color and alpha mask videos with perfect sync
 
 ## Installation
 
-### Option 1: npm (when published)
+### Option 1: npm
 
 ```bash
 npm install magma-player
