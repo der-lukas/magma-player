@@ -181,7 +181,9 @@ export class MagmaPlayer {
     if (typeof window === "undefined") return false;
     const ua = window.navigator.userAgent || window.navigator.vendor || "";
     // Detect mobile devices (iOS, Android, etc.)
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      ua
+    );
   }
 
   /**
@@ -514,7 +516,7 @@ export class MagmaPlayer {
       this.maskVideo.playsInline = true;
       this.colorVideo.setAttribute("webkit-playsinline", "true");
       this.maskVideo.setAttribute("webkit-playsinline", "true");
-      
+
       // Disable picture-in-picture (applies to all platforms - prevents interference)
       if (this.colorVideo.disablePictureInPicture !== undefined) {
         this.colorVideo.disablePictureInPicture = true;
@@ -522,14 +524,14 @@ export class MagmaPlayer {
       if (this.maskVideo.disablePictureInPicture !== undefined) {
         this.maskVideo.disablePictureInPicture = true;
       }
-      
+
       // iOS-specific optimizations
       if (this.isIOS) {
         // Prevent AirPlay from interfering (iOS-specific)
         this.colorVideo.setAttribute("x-webkit-airplay", "deny");
         this.maskVideo.setAttribute("x-webkit-airplay", "deny");
       }
-      
+
       // Preload strategy: metadata on mobile (better performance), auto on desktop
       // This helps prevent stuttering on mobile devices with limited bandwidth/processing
       if (this.isMobile) {
@@ -637,7 +639,8 @@ export class MagmaPlayer {
         });
       }
 
-      // Set up early first frame rendering when we have metadata
+      // Set up early first frame rendering - show poster as soon as possible
+      // This happens during loading, before playback starts
       const tryFirstFrameOnMetadata = () => {
         if (
           this.colorVideo.videoWidth &&
@@ -645,11 +648,13 @@ export class MagmaPlayer {
           this.maskVideo.videoWidth &&
           this.maskVideo.videoHeight
         ) {
-          // We have dimensions, try to render first frame when we have frame data
+          // We have dimensions, try to render first frame as poster
+          // This will show immediately, even before videos are ready to play
           this._tryRenderFirstFrame();
         }
       };
 
+      // Try to render first frame as soon as we have metadata (dimensions)
       this.colorVideo.addEventListener(
         "loadedmetadata",
         tryFirstFrameOnMetadata,
@@ -658,6 +663,23 @@ export class MagmaPlayer {
       this.maskVideo.addEventListener(
         "loadedmetadata",
         tryFirstFrameOnMetadata,
+        { once: true }
+      );
+
+      // Also try when we have actual frame data (loadeddata)
+      // This is more reliable for first frame rendering
+      this.colorVideo.addEventListener(
+        "loadeddata",
+        () => {
+          this._tryRenderFirstFrame();
+        },
+        { once: true }
+      );
+      this.maskVideo.addEventListener(
+        "loadeddata",
+        () => {
+          this._tryRenderFirstFrame();
+        },
         { once: true }
       );
 
@@ -959,7 +981,7 @@ export class MagmaPlayer {
       // Check if any video failed to load
       const colorFailed = loadResults[0].status === "rejected";
       const maskFailed = loadResults[1].status === "rejected";
-      
+
       if (colorFailed || maskFailed) {
         const errors = [];
         if (colorFailed) {
@@ -969,10 +991,13 @@ export class MagmaPlayer {
           errors.push(loadResults[1].reason);
         }
         // Throw the first error (or combine them)
-        throw errors[0] || new MagmaPlayerError(
-          ERROR_CODES.VIDEO_LOAD_FAILED,
-          "One or more videos failed to load",
-          { errors }
+        throw (
+          errors[0] ||
+          new MagmaPlayerError(
+            ERROR_CODES.VIDEO_LOAD_FAILED,
+            "One or more videos failed to load",
+            { errors }
+          )
         );
       }
 
@@ -1490,7 +1515,7 @@ export class MagmaPlayer {
       // The internal canvas resolution should be higher, but CSS size can be constrained
       const internalWidth = width * this.pixelRatio;
       const internalHeight = height * this.pixelRatio;
-      
+
       // Set internal canvas resolution (always use pixel ratio for quality)
       this.canvas.width = internalWidth;
       this.canvas.height = internalHeight;
@@ -1588,21 +1613,82 @@ export class MagmaPlayer {
 
     // Only autoplay if enabled
     if (this.autoplay) {
-      this._isPlaying = true;
-      // Start shared clock now, before videos start playing
-      this.sharedClockStart = performance.now();
-
-      // Emit play event immediately so UI can update even if listeners are set up later
-      // Use setTimeout to ensure it's emitted after any synchronous listeners are set up
-      setTimeout(() => {
-        if (this._isPlaying) {
-          this.emit("play");
-        }
-      }, 0);
+      // DON'T set _isPlaying = true yet - wait for videos to be ready first
+      // This ensures first frame can render as poster before playback starts
 
       try {
-        // On iOS, wait for better buffering before starting playback to reduce stuttering
-        const startPlayback = () => {
+        // Wait for videos to be ready before starting playback
+        // This ensures:
+        // 1. First frame can render as poster (happens during loading via _tryRenderFirstFrame)
+        // 2. Videos are buffered before playback starts (smooth playback)
+        const waitForBuffering = () => {
+          return new Promise((resolve) => {
+            let colorReady = false;
+            let maskReady = false;
+
+            const checkReady = () => {
+              if (colorReady && maskReady) {
+                resolve();
+              }
+            };
+
+            const colorHandler = () => {
+              colorReady = true;
+              checkReady();
+            };
+            const maskHandler = () => {
+              maskReady = true;
+              checkReady();
+            };
+
+            // Wait for canplay (minimum) or canplaythrough (preferred)
+            // This ensures videos have actual frame data, not just metadata
+            // On mobile, prefer canplaythrough for better buffering
+            const minReadyState = this.isMobile ? 3 : 2; // canplay on mobile, loadedmetadata on desktop
+
+            if (this.colorVideo.readyState >= minReadyState) {
+              colorReady = true;
+            } else {
+              // Prefer canplaythrough for better buffering, but canplay is acceptable
+              this.colorVideo.addEventListener("canplaythrough", colorHandler, {
+                once: true,
+              });
+              this.colorVideo.addEventListener("canplay", colorHandler, {
+                once: true,
+              });
+            }
+
+            if (this.maskVideo.readyState >= minReadyState) {
+              maskReady = true;
+            } else {
+              this.maskVideo.addEventListener("canplaythrough", maskHandler, {
+                once: true,
+              });
+              this.maskVideo.addEventListener("canplay", maskHandler, {
+                once: true,
+              });
+            }
+
+            // Timeout: longer on mobile (network may be slower), shorter on desktop
+            const timeout = this.isMobile ? 2000 : 500;
+            setTimeout(() => {
+              if (!colorReady) colorReady = true;
+              if (!maskReady) maskReady = true;
+              checkReady();
+            }, timeout);
+          });
+        };
+
+        // Wait for buffering, THEN start playback
+        waitForBuffering().then(() => {
+          // Now that videos are ready, set playing state and start playback
+          this._isPlaying = true;
+          // Start shared clock now, before videos start playing
+          this.sharedClockStart = performance.now();
+
+          // Emit play event
+          this.emit("play");
+
           // Start both videos as close together as possible
           const playPromises = [
             this.colorVideo.play().catch((err) => {
@@ -1628,63 +1714,7 @@ export class MagmaPlayer {
               // Don't emit error for autoplay issues - they're not real errors
             }),
           ];
-          return playPromises;
-        };
 
-        // Wait for buffering before starting playback - good practice for all platforms
-        // Prevents stuttering by ensuring videos have sufficient data before playback starts
-        // On mobile, this is especially important due to network/processing constraints
-        const waitForBuffering = () => {
-          return new Promise((resolve) => {
-            let colorReady = false;
-            let maskReady = false;
-            
-            const checkReady = () => {
-              if (colorReady && maskReady) {
-                resolve();
-              }
-            };
-
-            const colorHandler = () => {
-              colorReady = true;
-              checkReady();
-            };
-            const maskHandler = () => {
-              maskReady = true;
-              checkReady();
-            };
-
-            // Wait for canplay (minimum) or canplaythrough (preferred)
-            // On mobile, wait longer; on desktop, can be more lenient
-            const minReadyState = this.isMobile ? 3 : 2; // canplay on mobile, loadedmetadata on desktop
-            
-            if (this.colorVideo.readyState >= minReadyState) {
-              colorReady = true;
-            } else {
-              this.colorVideo.addEventListener("canplay", colorHandler, { once: true });
-              this.colorVideo.addEventListener("canplaythrough", colorHandler, { once: true });
-            }
-
-            if (this.maskVideo.readyState >= minReadyState) {
-              maskReady = true;
-            } else {
-              this.maskVideo.addEventListener("canplay", maskHandler, { once: true });
-              this.maskVideo.addEventListener("canplaythrough", maskHandler, { once: true });
-            }
-
-            // Timeout: longer on mobile (network may be slower), shorter on desktop
-            const timeout = this.isMobile ? 2000 : 500;
-            setTimeout(() => {
-              if (!colorReady) colorReady = true;
-              if (!maskReady) maskReady = true;
-              checkReady();
-            }, timeout);
-          });
-        };
-
-        // Always wait for buffering, but with different thresholds for mobile vs desktop
-        waitForBuffering().then(() => {
-          const playPromises = startPlayback();
           this._handlePlayPromises(playPromises);
         });
       } catch (error) {
@@ -1771,13 +1801,24 @@ export class MagmaPlayer {
     }
     this.lastFrameTime = now - (elapsed % this.frameInterval);
 
-    if (!this._isPlaying || !this.isInitialized || !this.isVisible) {
+    // Render even when paused if first frame hasn't been rendered yet
+    // This ensures instances appear immediately even if autoplay is false
+    const shouldRender =
+      this.isInitialized &&
+      this.isVisible &&
+      (this._isPlaying || !this._firstFrameRendered);
+
+    if (!shouldRender) {
       return;
     }
 
+    // For first frame, allow lower readyState (1 = metadata loaded)
+    // For normal playback, require readyState >= 2 (data loaded)
+    const minReadyState = this._firstFrameRendered ? 2 : 1;
+
     if (
-      this.colorVideo.readyState < 2 ||
-      this.maskVideo.readyState < 2 ||
+      this.colorVideo.readyState < minReadyState ||
+      this.maskVideo.readyState < minReadyState ||
       this.canvas.width === 0
     ) {
       return;
@@ -1850,8 +1891,9 @@ export class MagmaPlayer {
 
     // Sync both videos to shared clock
     // On iOS, throttle sync checks to avoid stuttering from frequent seeks
-    const shouldSync = this.syncInterval === 0 || (now - this.lastSyncCheck) >= this.syncInterval;
-    
+    const shouldSync =
+      this.syncInterval === 0 || now - this.lastSyncCheck >= this.syncInterval;
+
     if (shouldSync) {
       try {
         // Sync color video
@@ -1883,7 +1925,7 @@ export class MagmaPlayer {
           this.sharedClockStart =
             performance.now() - (masterTime * 1000) / this.playbackRate;
         }
-        
+
         this.lastSyncCheck = now;
       } catch (error) {
         // Ignore seek errors during normal playback
@@ -1899,14 +1941,23 @@ export class MagmaPlayer {
     }
 
     // Render frame
-    if (this.gl && !this.colorVideo.seeking && !this.maskVideo.seeking) {
+    // For first frame, allow rendering even during seeks (with a small delay check)
+    const isFirstFrame = !this._firstFrameRendered;
+    const canRender =
+      isFirstFrame || (!this.colorVideo.seeking && !this.maskVideo.seeking);
+
+    if (this.gl && canRender) {
       this.renderWebGL();
-    } else if (
-      this.ctx &&
-      !this.colorVideo.seeking &&
-      !this.maskVideo.seeking
-    ) {
+      // Mark first frame as rendered if we successfully rendered
+      if (isFirstFrame) {
+        this._firstFrameRendered = true;
+      }
+    } else if (this.ctx && canRender) {
       this.renderCanvas2D();
+      // Mark first frame as rendered if we successfully rendered
+      if (isFirstFrame) {
+        this._firstFrameRendered = true;
+      }
     }
   }
 
@@ -1931,12 +1982,19 @@ export class MagmaPlayer {
 
       // Only update texture if frame time changed AND video is ready
       // On mobile, also require significant time difference and higher readyState to reduce texture updates
-      const minReadyState = this.isMobile ? 3 : 2; // canplay on mobile, loadedmetadata on desktop
+      // For first frame, be more lenient with readyState requirements
+      const isFirstFrame = this.lastColorFrameTime === -1;
+      const minReadyState = isFirstFrame
+        ? 1 // For first frame, metadata is enough
+        : this.isMobile
+        ? 3
+        : 2; // For subsequent frames, use stricter requirements
+
       const colorNeedsUpdate =
-        colorTimeDiff > frameTimeThreshold &&
+        (isFirstFrame || colorTimeDiff > frameTimeThreshold) &&
         this.colorVideo.readyState >= minReadyState;
       const maskNeedsUpdate =
-        maskTimeDiff > frameTimeThreshold &&
+        (isFirstFrame || maskTimeDiff > frameTimeThreshold) &&
         this.maskVideo.readyState >= minReadyState;
 
       if (colorNeedsUpdate) {
@@ -1967,12 +2025,9 @@ export class MagmaPlayer {
         this.lastMaskFrameTime = maskFrameTime;
       }
 
-      // Only draw if at least one texture was updated, or if this is the first frame
-      if (
-        colorNeedsUpdate ||
-        maskNeedsUpdate ||
-        this.lastColorFrameTime === -1
-      ) {
+      // Always draw if textures were updated, or if this is the first frame attempt
+      // For first frame, draw even if only one texture is ready (better than nothing)
+      if (colorNeedsUpdate || maskNeedsUpdate || isFirstFrame) {
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       }
     } catch (error) {
@@ -2065,18 +2120,9 @@ export class MagmaPlayer {
         }
       }
 
-      // Ensure videos are at time 0 for first frame
-      // Only seek if they're not already at 0 (to avoid unnecessary seeks)
-      if (Math.abs(this.colorVideo.currentTime) > 0.01) {
-        this.colorVideo.currentTime = 0;
-      }
-      if (Math.abs(this.maskVideo.currentTime) > 0.01) {
-        this.maskVideo.currentTime = 0;
-      }
-
-      // Wait for seek to complete, then render
-      // Use a small timeout to ensure seek completes
-      setTimeout(() => {
+      // Try to render the current frame immediately (don't require time 0)
+      // This is more robust for multiple instances and works even if videos are already playing
+      const tryRenderNow = () => {
         // Double-check we still have the data and context
         if (
           this.colorVideo &&
@@ -2097,20 +2143,63 @@ export class MagmaPlayer {
               if (!this.alphaTexture) {
                 this.alphaTexture = this.createTexture();
               }
-              // Render using WebGL
+              // Render using WebGL - render current frame, not necessarily time 0
               this.renderWebGL();
+              this._firstFrameRendered = true;
             } else if (this.ctx) {
-              // Render using Canvas2D
+              // Render using Canvas2D - render current frame
               this.renderCanvas2D();
+              this._firstFrameRendered = true;
             }
-
-            this._firstFrameRendered = true;
           } catch (error) {
-            // Silently fail - first frame rendering is optional
-            // The normal render loop will handle it once fully loaded
+            // If rendering fails, try again after a short delay
+            // This handles cases where videos are still seeking or not fully ready
+            setTimeout(tryRenderNow, 100);
           }
         }
-      }, 50); // Small delay to ensure seek completes
+      };
+
+      // Try to render immediately if videos are already at a valid time
+      // Otherwise, seek to 0 and wait
+      const currentTime = this.colorVideo.currentTime || 0;
+      if (
+        currentTime >= 0 &&
+        this.colorVideo.readyState >= 2 &&
+        this.maskVideo.readyState >= 2
+      ) {
+        // Videos are already at a valid time and loaded - render immediately
+        tryRenderNow();
+      } else {
+        // Videos need to be positioned - seek to 0 first
+        // Only seek if they're not already at 0 (to avoid unnecessary seeks)
+        if (Math.abs(this.colorVideo.currentTime) > 0.01) {
+          this.colorVideo.currentTime = 0;
+        }
+        if (Math.abs(this.maskVideo.currentTime) > 0.01) {
+          this.maskVideo.currentTime = 0;
+        }
+
+        // Wait for seek to complete or videos to be ready, then render
+        // Use multiple attempts with increasing delays for robustness
+        const attemptRender = (attempt = 0) => {
+          if (this._firstFrameRendered) return; // Already rendered
+
+          if (
+            this.colorVideo &&
+            this.maskVideo &&
+            this.colorVideo.readyState >= 1 &&
+            this.maskVideo.readyState >= 1
+          ) {
+            tryRenderNow();
+          } else if (attempt < 5) {
+            // Try up to 5 times with increasing delays
+            setTimeout(() => attemptRender(attempt + 1), 50 * (attempt + 1));
+          }
+        };
+
+        // Start attempting after initial delay
+        setTimeout(() => attemptRender(), 50);
+      }
     } catch (error) {
       // Silently fail - first frame rendering is optional
       // The normal render loop will handle it once fully loaded
@@ -2717,7 +2806,7 @@ export class MagmaPlayer {
           this.gl.deleteBuffer(this.uvBuffer);
           this.uvBuffer = null;
         }
-        
+
         // CRITICAL: Lose the WebGL context to free it up for other instances
         // This prevents "Too many active WebGL contexts" warnings
         const extension = this.gl.getExtension("WEBGL_lose_context");

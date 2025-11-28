@@ -2,6 +2,21 @@
 
 All notable changes to MagmaPlayer will be documented in this file.
 
+## [1.2.1] - 2025-01-XX
+
+### Fixed
+- First frame rendering now works reliably for multiple instances
+- Instances now appear immediately as posters, even when paused
+- Playback now waits for videos to be fully buffered before starting (prevents blank frames)
+- First frame renders regardless of video currentTime (no longer requires time 0)
+- Render loop now renders first frame even when paused (poster mode)
+
+### Changed
+- Improved first frame rendering logic: renders current frame immediately if available, only seeks to 0 if needed
+- Playback start logic: `_isPlaying` is now set only after videos are buffered (canplay/canplaythrough)
+- First frame rendering attempts multiple times with increasing delays for better reliability
+- Lower readyState requirements for first frame (readyState >= 1) vs normal playback (readyState >= 2)
+
 ## [1.2.0] - 2025-01-XX
 
 ### Added
