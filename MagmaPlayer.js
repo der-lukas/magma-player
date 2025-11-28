@@ -125,6 +125,15 @@ export class MagmaPlayer {
     this.pixelRatio =
       typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
 
+    // Device detection and optimizations
+    this.isIOS = this._detectIOS();
+    this.isMobile = this._detectMobile();
+    this.lastSyncCheck = 0;
+    // Mobile devices are sensitive to frequent seeks - use larger threshold and throttle sync checks
+    // Desktop can handle frame-perfect sync, mobile needs throttling for smooth playback
+    this.syncInterval = this.isMobile ? 100 : 0; // Only sync every 100ms on mobile (vs every frame on desktop)
+    this.syncThreshold = this.isMobile ? 0.1 : 0.016; // Larger threshold on mobile (0.1s vs 0.016s)
+
     // Cache computed styles to avoid repeated getComputedStyle calls
     this.cachedComputedStyle = null;
     this.styleCacheTime = 0;
@@ -152,19 +161,54 @@ export class MagmaPlayer {
   }
 
   /**
+   * Detect if running on iOS Safari
+   * @private
+   */
+  _detectIOS() {
+    if (typeof window === "undefined") return false;
+    const ua = window.navigator.userAgent || window.navigator.vendor || "";
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+    // Also check for iOS Safari specifically (not Chrome on iOS)
+    const isSafari = /Safari/.test(ua) && !/Chrome|CriOS|FxiOS/.test(ua);
+    return isIOS && isSafari;
+  }
+
+  /**
+   * Detect if running on a mobile device (iOS, Android, etc.)
+   * @private
+   */
+  _detectMobile() {
+    if (typeof window === "undefined") return false;
+    const ua = window.navigator.userAgent || window.navigator.vendor || "";
+    // Detect mobile devices (iOS, Android, etc.)
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+  }
+
+  /**
    * Resolve canvas from input (HTMLCanvasElement, string selector, or function)
    * @private
    */
   _resolveCanvas(canvasInput) {
     if (canvasInput instanceof HTMLCanvasElement) {
+      // Ensure canvas is properly isolated for multiple instances
+      // Each canvas should have its own rendering context
       return canvasInput;
     }
 
     if (typeof canvasInput === "string") {
-      // CSS selector
+      // CSS selector - WARNING: querySelector only returns the FIRST match
+      // If multiple instances use the same selector, they'll share the same canvas
+      // This is likely the issue with multiple instances!
       const element = document.querySelector(canvasInput);
       if (element instanceof HTMLCanvasElement) {
         return element;
+      }
+      // If selector doesn't match, try querySelectorAll to warn about multiple matches
+      const allMatches = document.querySelectorAll(canvasInput);
+      if (allMatches.length > 1) {
+        console.warn(
+          `MagmaPlayer: Selector "${canvasInput}" matches ${allMatches.length} elements. Only the first will be used. Each player instance needs a unique canvas element or selector.`
+        );
       }
       return null;
     }
@@ -454,6 +498,9 @@ export class MagmaPlayer {
   async _doInit() {
     try {
       // Create video elements
+      // Each instance creates its own video elements, even if they use the same source URL
+      // The browser's HTTP cache will serve cached content, but each video element
+      // still needs to go through readyState transitions independently
       this.colorVideo = document.createElement("video");
       this.maskVideo = document.createElement("video");
 
@@ -467,8 +514,31 @@ export class MagmaPlayer {
       this.maskVideo.playsInline = true;
       this.colorVideo.setAttribute("webkit-playsinline", "true");
       this.maskVideo.setAttribute("webkit-playsinline", "true");
-      this.colorVideo.preload = "auto";
-      this.maskVideo.preload = "auto";
+      
+      // Disable picture-in-picture (applies to all platforms - prevents interference)
+      if (this.colorVideo.disablePictureInPicture !== undefined) {
+        this.colorVideo.disablePictureInPicture = true;
+      }
+      if (this.maskVideo.disablePictureInPicture !== undefined) {
+        this.maskVideo.disablePictureInPicture = true;
+      }
+      
+      // iOS-specific optimizations
+      if (this.isIOS) {
+        // Prevent AirPlay from interfering (iOS-specific)
+        this.colorVideo.setAttribute("x-webkit-airplay", "deny");
+        this.maskVideo.setAttribute("x-webkit-airplay", "deny");
+      }
+      
+      // Preload strategy: metadata on mobile (better performance), auto on desktop
+      // This helps prevent stuttering on mobile devices with limited bandwidth/processing
+      if (this.isMobile) {
+        this.colorVideo.preload = "metadata";
+        this.maskVideo.preload = "metadata";
+      } else {
+        this.colorVideo.preload = "auto";
+        this.maskVideo.preload = "auto";
+      }
       this.colorVideo.volume = this.volume;
       this.maskVideo.volume = this.volume;
       this.colorVideo.playbackRate = this.playbackRate;
@@ -523,18 +593,22 @@ export class MagmaPlayer {
       // Try WebGL first if requested
       if (this.useWebGL) {
         // Try WebGL2 first for better performance
+        // Each canvas instance gets its own WebGL context (they're isolated)
         this.gl =
           this.canvas.getContext("webgl2", {
             alpha: true,
             premultipliedAlpha: false,
+            preserveDrawingBuffer: false, // Better performance, each frame is independent
           }) ||
           this.canvas.getContext("webgl", {
             alpha: true,
             premultipliedAlpha: false,
+            preserveDrawingBuffer: false,
           }) ||
           this.canvas.getContext("experimental-webgl", {
             alpha: true,
             premultipliedAlpha: false,
+            preserveDrawingBuffer: false,
           });
       }
 
@@ -588,7 +662,9 @@ export class MagmaPlayer {
       );
 
       // Wait for videos to load with timeout
-      await Promise.all([
+      // Use Promise.allSettled to ensure both videos attempt to load even if one fails
+      // This helps with synchronization when multiple instances are created
+      const loadResults = await Promise.allSettled([
         new Promise((resolve, reject) => {
           let resolved = false;
           // Store timeout ID on instance so we can clear it if player is destroyed
@@ -880,6 +956,26 @@ export class MagmaPlayer {
         }),
       ]);
 
+      // Check if any video failed to load
+      const colorFailed = loadResults[0].status === "rejected";
+      const maskFailed = loadResults[1].status === "rejected";
+      
+      if (colorFailed || maskFailed) {
+        const errors = [];
+        if (colorFailed) {
+          errors.push(loadResults[0].reason);
+        }
+        if (maskFailed) {
+          errors.push(loadResults[1].reason);
+        }
+        // Throw the first error (or combine them)
+        throw errors[0] || new MagmaPlayerError(
+          ERROR_CODES.VIDEO_LOAD_FAILED,
+          "One or more videos failed to load",
+          { errors }
+        );
+      }
+
       // Validate video state
       this.validateVideos();
 
@@ -1107,24 +1203,47 @@ export class MagmaPlayer {
 
   handleContextLoss(event) {
     event.preventDefault();
-    console.warn("WebGL context lost, will attempt to restore");
+    // Only warn if player is still active (not being destroyed)
+    if (this.isInitialized && this._isPlaying) {
+      console.warn("WebGL context lost, will attempt to restore");
+    }
     this.gl = null;
+    // Clear WebGL resources since context is lost
+    this.colorTexture = null;
+    this.alphaTexture = null;
+    this.program = null;
+    this.positionBuffer = null;
+    this.uvBuffer = null;
   }
 
   handleContextRestore() {
+    // Only restore if player is still initialized and not being destroyed
+    if (!this.isInitialized || !this.canvas) {
+      return;
+    }
     console.log("WebGL context restored, reinitializing");
     if (this.useWebGL) {
       this.gl =
         this.canvas.getContext("webgl2", {
           alpha: true,
           premultipliedAlpha: false,
+          preserveDrawingBuffer: false,
         }) ||
         this.canvas.getContext("webgl", {
           alpha: true,
           premultipliedAlpha: false,
+          preserveDrawingBuffer: false,
         });
       if (this.gl) {
         this.initWebGL();
+        // Re-render first frame after context restore
+        if (this.colorVideo && this.maskVideo) {
+          requestAnimationFrame(() => {
+            if (this.gl && this.isInitialized) {
+              this._tryRenderFirstFrame();
+            }
+          });
+        }
       } else {
         // Fallback to Canvas2D
         this.ctx = this.canvas.getContext("2d", {
@@ -1367,87 +1486,78 @@ export class MagmaPlayer {
           this.canvas.style.maxHeight && this.canvas.style.maxHeight !== "none";
       }
 
-      // Only apply pixel ratio scaling if no CSS constraints are set
-      // This prevents stretching when parent container has size constraints
-      const shouldUsePixelRatio =
-        !hasMaxWidth && !hasMaxHeight && this.pixelRatio > 1;
+      // ALWAYS use pixel ratio for internal canvas resolution (for quality on UHD/retina displays)
+      // The internal canvas resolution should be higher, but CSS size can be constrained
+      const internalWidth = width * this.pixelRatio;
+      const internalHeight = height * this.pixelRatio;
+      
+      // Set internal canvas resolution (always use pixel ratio for quality)
+      this.canvas.width = internalWidth;
+      this.canvas.height = internalHeight;
 
-      if (shouldUsePixelRatio) {
-        // Set internal resolution based on pixel ratio for retina displays
-        this.canvas.width = width * this.pixelRatio;
-        this.canvas.height = height * this.pixelRatio;
+      // Calculate CSS size (may be constrained by maxWidth/maxHeight)
+      let cssWidth = width;
+      let cssHeight = height;
 
-        // Set CSS size to actual video size
-        this.canvas.style.width = `${width}px`;
-        this.canvas.style.height = `${height}px`;
-      } else {
-        // Use actual video dimensions (no pixel ratio scaling)
-        this.canvas.width = width;
-        this.canvas.height = height;
+      // When constraints are present, calculate CSS size that maintains aspect ratio
+      if (hasMaxWidth || hasMaxHeight) {
+        const aspectRatio = width / height;
 
-        // When constraints are present, calculate CSS size that maintains aspect ratio
-        if (hasMaxWidth || hasMaxHeight) {
-          const aspectRatio = width / height;
-          let cssWidth = width;
-          let cssHeight = height;
+        try {
+          // Use cached computed style
+          const computedStyle =
+            this.cachedComputedStyle || window.getComputedStyle(this.canvas);
 
-          try {
-            // Use cached computed style
-            const computedStyle =
-              this.cachedComputedStyle || window.getComputedStyle(this.canvas);
-
-            // Check maxHeight constraint
-            if (hasMaxHeight) {
-              const maxHeightValue = parseFloat(computedStyle.maxHeight);
-              if (
-                !isNaN(maxHeightValue) &&
-                maxHeightValue > 0 &&
-                height > maxHeightValue
-              ) {
-                cssHeight = maxHeightValue;
-                cssWidth = maxHeightValue * aspectRatio;
-              }
+          // Check maxHeight constraint
+          if (hasMaxHeight) {
+            const maxHeightValue = parseFloat(computedStyle.maxHeight);
+            if (
+              !isNaN(maxHeightValue) &&
+              maxHeightValue > 0 &&
+              height > maxHeightValue
+            ) {
+              cssHeight = maxHeightValue;
+              cssWidth = maxHeightValue * aspectRatio;
             }
-
-            // Check maxWidth constraint (after maxHeight, as it might be more restrictive)
-            if (hasMaxWidth) {
-              const maxWidthValue =
-                computedStyle.maxWidth === "100%"
-                  ? this.canvas.parentElement?.clientWidth || width
-                  : parseFloat(computedStyle.maxWidth);
-              if (
-                !isNaN(maxWidthValue) &&
-                maxWidthValue > 0 &&
-                cssWidth > maxWidthValue
-              ) {
-                cssWidth = maxWidthValue;
-                cssHeight = maxWidthValue / aspectRatio;
-              }
-            }
-
-            // Set CSS dimensions to maintain aspect ratio
-            this.canvas.style.width = `${cssWidth}px`;
-            this.canvas.style.height = `${cssHeight}px`;
-          } catch (e) {
-            // Fallback: don't set explicit dimensions
-            this.canvas.style.width = "";
-            this.canvas.style.height = "";
           }
-        } else {
-          // No constraints, set explicit dimensions
+
+          // Check maxWidth constraint (after maxHeight, as it might be more restrictive)
+          if (hasMaxWidth) {
+            const maxWidthValue =
+              computedStyle.maxWidth === "100%"
+                ? this.canvas.parentElement?.clientWidth || width
+                : parseFloat(computedStyle.maxWidth);
+            if (
+              !isNaN(maxWidthValue) &&
+              maxWidthValue > 0 &&
+              cssWidth > maxWidthValue
+            ) {
+              cssWidth = maxWidthValue;
+              cssHeight = maxWidthValue / aspectRatio;
+            }
+          }
+
+          // Set CSS dimensions to maintain aspect ratio
+          this.canvas.style.width = `${cssWidth}px`;
+          this.canvas.style.height = `${cssHeight}px`;
+        } catch (e) {
+          // Fallback: set explicit dimensions without constraints
           this.canvas.style.width = `${width}px`;
           this.canvas.style.height = `${height}px`;
         }
+      } else {
+        // No constraints, set explicit dimensions
+        this.canvas.style.width = `${width}px`;
+        this.canvas.style.height = `${height}px`;
       }
 
       if (this.gl) {
         this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
       } else if (this.ctx) {
-        // Reset transform and scale if using pixel ratio
+        // Reset transform and scale to match pixel ratio
+        // Internal canvas is always at pixel ratio resolution, so we need to scale down for rendering
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-        if (shouldUsePixelRatio) {
-          this.ctx.scale(this.pixelRatio, this.pixelRatio);
-        }
+        this.ctx.scale(this.pixelRatio, this.pixelRatio);
       }
 
       // Recreate temp canvases if dimensions changed
@@ -1491,53 +1601,91 @@ export class MagmaPlayer {
       }, 0);
 
       try {
-        // Start both videos as close together as possible
-        const playPromises = [
-          this.colorVideo.play().catch((err) => {
-            // Suppress autoplay warnings - these are expected in some browsers
-            // Only log if it's not the common autoplay interruption error
-            if (
-              !err.message ||
-              !err.message.includes("interrupted by a call to pause")
-            ) {
-              console.warn("Color video autoplay prevented:", err);
-            }
-            // Don't emit error for autoplay issues - they're not real errors
-          }),
-          this.maskVideo.play().catch((err) => {
-            // Suppress autoplay warnings - these are expected in some browsers
-            // Only log if it's not the common autoplay interruption error
-            if (
-              !err.message ||
-              !err.message.includes("interrupted by a call to pause")
-            ) {
-              console.warn("Mask video autoplay prevented:", err);
-            }
-            // Don't emit error for autoplay issues - they're not real errors
-          }),
-        ];
-
-        // Wait for both to start, then ensure they're synced
-        Promise.all(playPromises).then(() => {
-          // Force sync after videos start playing
-          requestAnimationFrame(() => {
-            if (this.colorVideo && this.maskVideo) {
-              const syncTime = Math.min(
-                this.colorVideo.currentTime || 0,
-                this.maskVideo.currentTime || 0
-              );
-              this.colorVideo.currentTime = syncTime;
-              this.maskVideo.currentTime = syncTime;
-              this.sharedClockStart =
-                performance.now() - (syncTime * 1000) / this.playbackRate;
-
-              // Emit play event again after autoplay starts successfully
-              // This ensures UI state is updated even if the first emit was missed
-              if (this._isPlaying) {
-                this.emit("play");
+        // On iOS, wait for better buffering before starting playback to reduce stuttering
+        const startPlayback = () => {
+          // Start both videos as close together as possible
+          const playPromises = [
+            this.colorVideo.play().catch((err) => {
+              // Suppress autoplay warnings - these are expected in some browsers
+              // Only log if it's not the common autoplay interruption error
+              if (
+                !err.message ||
+                !err.message.includes("interrupted by a call to pause")
+              ) {
+                console.warn("Color video autoplay prevented:", err);
               }
+              // Don't emit error for autoplay issues - they're not real errors
+            }),
+            this.maskVideo.play().catch((err) => {
+              // Suppress autoplay warnings - these are expected in some browsers
+              // Only log if it's not the common autoplay interruption error
+              if (
+                !err.message ||
+                !err.message.includes("interrupted by a call to pause")
+              ) {
+                console.warn("Mask video autoplay prevented:", err);
+              }
+              // Don't emit error for autoplay issues - they're not real errors
+            }),
+          ];
+          return playPromises;
+        };
+
+        // Wait for buffering before starting playback - good practice for all platforms
+        // Prevents stuttering by ensuring videos have sufficient data before playback starts
+        // On mobile, this is especially important due to network/processing constraints
+        const waitForBuffering = () => {
+          return new Promise((resolve) => {
+            let colorReady = false;
+            let maskReady = false;
+            
+            const checkReady = () => {
+              if (colorReady && maskReady) {
+                resolve();
+              }
+            };
+
+            const colorHandler = () => {
+              colorReady = true;
+              checkReady();
+            };
+            const maskHandler = () => {
+              maskReady = true;
+              checkReady();
+            };
+
+            // Wait for canplay (minimum) or canplaythrough (preferred)
+            // On mobile, wait longer; on desktop, can be more lenient
+            const minReadyState = this.isMobile ? 3 : 2; // canplay on mobile, loadedmetadata on desktop
+            
+            if (this.colorVideo.readyState >= minReadyState) {
+              colorReady = true;
+            } else {
+              this.colorVideo.addEventListener("canplay", colorHandler, { once: true });
+              this.colorVideo.addEventListener("canplaythrough", colorHandler, { once: true });
             }
+
+            if (this.maskVideo.readyState >= minReadyState) {
+              maskReady = true;
+            } else {
+              this.maskVideo.addEventListener("canplay", maskHandler, { once: true });
+              this.maskVideo.addEventListener("canplaythrough", maskHandler, { once: true });
+            }
+
+            // Timeout: longer on mobile (network may be slower), shorter on desktop
+            const timeout = this.isMobile ? 2000 : 500;
+            setTimeout(() => {
+              if (!colorReady) colorReady = true;
+              if (!maskReady) maskReady = true;
+              checkReady();
+            }, timeout);
           });
+        };
+
+        // Always wait for buffering, but with different thresholds for mobile vs desktop
+        waitForBuffering().then(() => {
+          const playPromises = startPlayback();
+          this._handlePlayPromises(playPromises);
         });
       } catch (error) {
         console.error("Play error:", error);
@@ -1550,6 +1698,49 @@ export class MagmaPlayer {
 
     // Start render loop
     this.renderLoop();
+  }
+
+  /**
+   * Handle play promises and sync videos after they start
+   * @private
+   */
+  _handlePlayPromises(playPromises) {
+    // Wait for both to start, then ensure they're synced
+    Promise.all(playPromises).then(() => {
+      // Force sync after videos start playing
+      requestAnimationFrame(() => {
+        if (this.colorVideo && this.maskVideo) {
+          const syncTime = Math.min(
+            this.colorVideo.currentTime || 0,
+            this.maskVideo.currentTime || 0
+          );
+          // On mobile, use a more conservative sync approach to avoid stuttering
+          // Desktop can handle tighter sync without performance issues
+          if (this.isMobile) {
+            // Only sync if there's a significant difference to avoid stuttering
+            const colorDiff = Math.abs(this.colorVideo.currentTime - syncTime);
+            const maskDiff = Math.abs(this.maskVideo.currentTime - syncTime);
+            if (colorDiff > 0.05) {
+              this.colorVideo.currentTime = syncTime;
+            }
+            if (maskDiff > 0.05) {
+              this.maskVideo.currentTime = syncTime;
+            }
+          } else {
+            this.colorVideo.currentTime = syncTime;
+            this.maskVideo.currentTime = syncTime;
+          }
+          this.sharedClockStart =
+            performance.now() - (syncTime * 1000) / this.playbackRate;
+
+          // Emit play event again after autoplay starts successfully
+          // This ensures UI state is updated even if the first emit was missed
+          if (this._isPlaying) {
+            this.emit("play");
+          }
+        }
+      });
+    });
   }
 
   renderLoop() {
@@ -1658,40 +1849,45 @@ export class MagmaPlayer {
     if (targetTime < 0) targetTime = 0;
 
     // Sync both videos to shared clock
-    // Use smaller threshold for better sync (0.016s = 1 frame at 60fps)
-    const SYNC_THRESHOLD = 0.016;
-    try {
-      // Sync color video
-      const colorDiff = Math.abs(this.colorVideo.currentTime - targetTime);
-      if (colorDiff > SYNC_THRESHOLD && !this.colorVideo.seeking) {
-        this.colorVideo.currentTime = targetTime;
-      }
+    // On iOS, throttle sync checks to avoid stuttering from frequent seeks
+    const shouldSync = this.syncInterval === 0 || (now - this.lastSyncCheck) >= this.syncInterval;
+    
+    if (shouldSync) {
+      try {
+        // Sync color video
+        const colorDiff = Math.abs(this.colorVideo.currentTime - targetTime);
+        if (colorDiff > this.syncThreshold && !this.colorVideo.seeking) {
+          this.colorVideo.currentTime = targetTime;
+        }
 
-      // Sync mask video
-      const maskDiff = Math.abs(this.maskVideo.currentTime - targetTime);
-      if (maskDiff > SYNC_THRESHOLD && !this.maskVideo.seeking) {
-        this.maskVideo.currentTime = targetTime;
-      }
+        // Sync mask video
+        const maskDiff = Math.abs(this.maskVideo.currentTime - targetTime);
+        if (maskDiff > this.syncThreshold && !this.maskVideo.seeking) {
+          this.maskVideo.currentTime = targetTime;
+        }
 
-      // If videos are out of sync with each other (even if within threshold of target),
-      // sync them to each other first
-      const videoDiff = Math.abs(
-        this.colorVideo.currentTime - this.maskVideo.currentTime
-      );
-      if (
-        videoDiff > SYNC_THRESHOLD &&
-        !this.colorVideo.seeking &&
-        !this.maskVideo.seeking
-      ) {
-        // Use color video as master (it's typically loaded first)
-        const masterTime = this.colorVideo.currentTime;
-        this.maskVideo.currentTime = masterTime;
-        // Update shared clock to match
-        this.sharedClockStart =
-          performance.now() - (masterTime * 1000) / this.playbackRate;
+        // If videos are out of sync with each other (even if within threshold of target),
+        // sync them to each other first
+        const videoDiff = Math.abs(
+          this.colorVideo.currentTime - this.maskVideo.currentTime
+        );
+        if (
+          videoDiff > this.syncThreshold &&
+          !this.colorVideo.seeking &&
+          !this.maskVideo.seeking
+        ) {
+          // Use color video as master (it's typically loaded first)
+          const masterTime = this.colorVideo.currentTime;
+          this.maskVideo.currentTime = masterTime;
+          // Update shared clock to match
+          this.sharedClockStart =
+            performance.now() - (masterTime * 1000) / this.playbackRate;
+        }
+        
+        this.lastSyncCheck = now;
+      } catch (error) {
+        // Ignore seek errors during normal playback
       }
-    } catch (error) {
-      // Ignore seek errors during normal playback
     }
 
     // Emit timeupdate event (throttled to avoid excessive event firing)
@@ -1726,13 +1922,22 @@ export class MagmaPlayer {
       const colorFrameTime = this.colorVideo.currentTime;
       const maskFrameTime = this.maskVideo.currentTime;
 
+      // On mobile, be more conservative with texture updates to avoid performance issues
+      // Only update if frame time changed significantly (more than 1 frame)
+      // Desktop GPUs can handle frequent updates, mobile needs throttling
+      const frameTimeThreshold = this.isMobile ? 0.033 : 0; // ~1 frame at 30fps on mobile
+      const colorTimeDiff = Math.abs(colorFrameTime - this.lastColorFrameTime);
+      const maskTimeDiff = Math.abs(maskFrameTime - this.lastMaskFrameTime);
+
       // Only update texture if frame time changed AND video is ready
+      // On mobile, also require significant time difference and higher readyState to reduce texture updates
+      const minReadyState = this.isMobile ? 3 : 2; // canplay on mobile, loadedmetadata on desktop
       const colorNeedsUpdate =
-        colorFrameTime !== this.lastColorFrameTime &&
-        this.colorVideo.readyState >= 2;
+        colorTimeDiff > frameTimeThreshold &&
+        this.colorVideo.readyState >= minReadyState;
       const maskNeedsUpdate =
-        maskFrameTime !== this.lastMaskFrameTime &&
-        this.maskVideo.readyState >= 2;
+        maskTimeDiff > frameTimeThreshold &&
+        this.maskVideo.readyState >= minReadyState;
 
       if (colorNeedsUpdate) {
         gl.activeTexture(gl.TEXTURE0);
@@ -1828,6 +2033,7 @@ export class MagmaPlayer {
 
     try {
       // Set canvas size if not already set
+      // ALWAYS use pixel ratio for internal resolution (for quality on UHD/retina displays)
       if (this.canvas.width === 0 || this.canvas.height === 0) {
         if (this.fixedSize) {
           const { width, height } = this.fixedSize;
@@ -1853,6 +2059,7 @@ export class MagmaPlayer {
         if (this.gl) {
           this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
         } else if (this.ctx) {
+          // Scale context to match pixel ratio (internal canvas is at pixel ratio resolution)
           this.ctx.setTransform(1, 0, 0, 1, 0, 0);
           this.ctx.scale(this.pixelRatio, this.pixelRatio);
         }
@@ -2489,11 +2696,34 @@ export class MagmaPlayer {
 
     if (this.gl) {
       try {
-        if (this.colorTexture) this.gl.deleteTexture(this.colorTexture);
-        if (this.alphaTexture) this.gl.deleteTexture(this.alphaTexture);
-        if (this.program) this.gl.deleteProgram(this.program);
-        if (this.positionBuffer) this.gl.deleteBuffer(this.positionBuffer);
-        if (this.uvBuffer) this.gl.deleteBuffer(this.uvBuffer);
+        // Delete all WebGL resources
+        if (this.colorTexture) {
+          this.gl.deleteTexture(this.colorTexture);
+          this.colorTexture = null;
+        }
+        if (this.alphaTexture) {
+          this.gl.deleteTexture(this.alphaTexture);
+          this.alphaTexture = null;
+        }
+        if (this.program) {
+          this.gl.deleteProgram(this.program);
+          this.program = null;
+        }
+        if (this.positionBuffer) {
+          this.gl.deleteBuffer(this.positionBuffer);
+          this.positionBuffer = null;
+        }
+        if (this.uvBuffer) {
+          this.gl.deleteBuffer(this.uvBuffer);
+          this.uvBuffer = null;
+        }
+        
+        // CRITICAL: Lose the WebGL context to free it up for other instances
+        // This prevents "Too many active WebGL contexts" warnings
+        const extension = this.gl.getExtension("WEBGL_lose_context");
+        if (extension) {
+          extension.loseContext();
+        }
       } catch (error) {
         console.error("Error cleaning up WebGL resources:", error);
       }

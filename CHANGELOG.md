@@ -2,6 +2,32 @@
 
 All notable changes to MagmaPlayer will be documented in this file.
 
+## [1.2.0] - 2025-01-XX
+
+### Added
+- iOS Safari performance optimizations (throttled sync, larger thresholds)
+- Mobile device detection and optimizations (applies to all mobile, not just iOS)
+- Improved WebGL context cleanup to prevent "Too many active WebGL contexts" warnings
+- Better video buffering handling (waits for canplay/canplaythrough on all platforms)
+- UHD display support with proper pixel ratio handling
+- Multiple instance support improvements
+
+### Fixed
+- WebGL contexts now properly released on destroy (prevents context accumulation)
+- Resolution issues on UHD displays (pixel ratio now always applied to internal canvas)
+- Multiple instances now work correctly (each gets its own canvas and context)
+- Improved context loss/restore handling
+- Better error handling with Promise.allSettled for video loading
+
+### Changed
+- Mobile devices now use throttled sync checks (100ms interval) for smoother playback
+- Mobile devices use larger sync threshold (0.1s vs 0.016s) to reduce stuttering
+- Conservative texture updates on mobile devices for better performance
+- Preload strategy: metadata on mobile, auto on desktop
+- Always wait for buffering before playback (good practice for all platforms)
+
+## [1.1.3] - Previous version
+
 ## [1.0.0] - 2025-11-24
 
 ### Added
